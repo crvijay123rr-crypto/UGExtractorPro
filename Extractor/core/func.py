@@ -7,6 +7,16 @@ from Extractor.core import script
 from Extractor.core.mongo.plans_db import premium_users
 
 
+async def chk_user(query, user_id):
+    user = await premium_users()
+    if user_id in user:
+        await query.answer("Premium User!!")
+        return 0
+    else:
+        await query.answer("Sir, you don't have premium access!!", show_alert=True)
+        return 1
+
+
 async def get_seconds(time_string):
     def extract_value_and_unit(ts):
         value = ""
