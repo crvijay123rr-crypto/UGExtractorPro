@@ -58,7 +58,7 @@ buttons = InlineKeyboardMarkup([
                   InlineKeyboardButton("Lᴏɢɪɴ/Wɪᴛʜᴏᴜᴛ Lᴏɢɪɴ", callback_data="modes_")
                 ],[
                   InlineKeyboardButton("🔍 Fɪɴᴅ Aᴘɪ", callback_data="findapi_"),
-                  InlineKeyboardButton("📓 Aᴘᴘx Lɪsᴛ", callback_data="appxlist")
+                  InlineKeyboardButton("📓 Aᴘᴘx Aᴘᴘs", callback_data="appxlist")
                 ],
                 [
                   InlineKeyboardButton("📝 Tᴇxᴛ ⟷ HTML", callback_data="converter_")
@@ -87,9 +87,9 @@ custom_button = [[
 
 button1 = [              
                 [
-                    InlineKeyboardButton("👑 Aᴘᴘx", callback_data="appx_"),
-                    InlineKeyboardButton("👑 A.K", callback_data="ak_"),
-                    InlineKeyboardButton("👑 Aᴘᴘx Oᴛᴘ", callback_data="appxotp_")
+                    # InlineKeyboardButton("👑 Aᴘᴘx", callback_data="appx_"),
+                    InlineKeyboardButton("👑 Apni Kaksha", callback_data="ak_"),
+                    # InlineKeyboardButton("👑 Aᴘᴘx Oᴛᴘ", callback_data="appxotp_")
                 ],
                 [
                     InlineKeyboardButton("👑 Aᴅᴅᴀ 𝟸𝟺𝟽", callback_data="adda_"),
@@ -108,7 +108,7 @@ button1 = [
                     InlineKeyboardButton("👑 Uᴛᴋᴀʀsʜ", callback_data="utkarsh_") 
                 ],
                 [
-                    InlineKeyboardButton("👑 Vɪsɪᴏɴ Iᴀs", callback_data="vision_ias_")
+                    InlineKeyboardButton("👑 Vɪsɪᴏɴ Iᴀs ✖️", callback_data="maintainer_")
                 ],
                 [
                    # InlineKeyboardButton("CʟᴀssPʟᴜs", callback_data="classplus_"),
