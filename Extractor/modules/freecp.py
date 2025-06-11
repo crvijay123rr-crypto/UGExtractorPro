@@ -107,49 +107,25 @@ async def fetch_cpwp_signed_url(url_val: str, name: str, session: aiohttp.Client
     return None
 
 async def process_cpwp_url(url_val: str, name: str, session: aiohttp.ClientSession, headers: Dict[str, str]) -> str | None:
-    TIMEOUT = 60  # Increased timeout
-    MAX_RETRIES = 3
-    
-    for attempt in range(MAX_RETRIES):
-        try:
-            signed_url = await asyncio.wait_for(
-                fetch_cpwp_signed_url(url_val, name, session, headers),
-                timeout=TIMEOUT
-            )
+    """Process video URLs"""
+    try:
+        if url_val.endswith(('.m3u8', '.mp4', '.mpd')):
+            return f"{name}:{url_val}\n"
             
-            if not signed_url:
-                logging.warning(f"Failed to obtain signed URL for {name}: {url_val}")
-                return None
-
-            if "testbook.com" in url_val or "classplusapp.com/drm" in url_val or "media-cdn.classplusapp.com/drm" in url_val:
-                return f"{name}:{url_val}\n"
-
-            async with session.get(signed_url, timeout=TIMEOUT) as response:
-                if response.status == 429:  # Rate limit
-                    wait_time = min(2 ** attempt, 30)
-                    await asyncio.sleep(wait_time)
-                    continue
-                    
-                response.raise_for_status()
-                return f"{name}:{url_val}\n"
-                
-        except asyncio.TimeoutError:
-            logging.error(f"Timeout processing URL for {name} (Attempt {attempt + 1}/{MAX_RETRIES})")
-            if attempt < MAX_RETRIES - 1:
-                wait_time = min(2 ** attempt, 30)
-                await asyncio.sleep(wait_time)
-        except Exception as e:
-            logging.error(f"Error processing {name}: {e} (Attempt {attempt + 1}/{MAX_RETRIES})")
-            if attempt < MAX_RETRIES - 1:
-                wait_time = min(2 ** attempt, 30)
-                await asyncio.sleep(wait_time)
-    
-    return None
+        # For special cases like testbook or drm content
+        if "testbook.com" in url_val or "classplusapp.com/drm" in url_val:
+            return f"{name}:{url_val}\n"
+            
+        return f"{name}:{url_val}\n"
+        
+    except Exception as e:
+        logging.error(f"Error processing URL for {name}: {e}")
+        return None
 
 
 async def get_cpwp_course_content(session: aiohttp.ClientSession, headers: Dict[str, str], Batch_Token: str, folder_id: int = 0, limit: int = 9999999999, retry_count: int = 0) -> Tuple[List[str], int, int, int]:
-    MAX_RETRIES = 5  # Increased from 3 to 5
-    TIMEOUT = 120  # Increased timeout for course content
+    MAX_RETRIES = 5
+    TIMEOUT = 120
     fetched_urls: set[str] = set()
     results: List[str] = []
     video_count = 0
@@ -163,7 +139,7 @@ async def get_cpwp_course_content(session: aiohttp.ClientSession, headers: Dict[
         params = {'folderId': folder_id, 'limit': limit}
 
         async with session.get(content_api, params=params, headers=headers, timeout=TIMEOUT) as res:
-            if res.status == 429:  # Rate limit
+            if res.status == 429:
                 wait_time = min(2 ** retry_count, 30)
                 await asyncio.sleep(wait_time)
                 return await get_cpwp_course_content(session, headers, Batch_Token, folder_id, limit, retry_count + 1)
@@ -172,13 +148,12 @@ async def get_cpwp_course_content(session: aiohttp.ClientSession, headers: Dict[
             res_json = await res.json()
             contents: List[Dict[str, Any]] = res_json['data']
 
-            # Process contents in smaller chunks to avoid overwhelming
             chunk_size = 5
             for i in range(0, len(contents), chunk_size):
                 chunk = contents[i:i + chunk_size]
                 
                 for content in chunk:
-                    if content['contentType'] == 1:
+                    if content['contentType'] == 1:  # Folder
                         folder_task = asyncio.create_task(get_cpwp_course_content(session, headers, Batch_Token, content['id'], retry_count=0))
                         folder_tasks.append((content['id'], folder_task))
                     else:
@@ -218,9 +193,8 @@ async def get_cpwp_course_content(session: aiohttp.ClientSession, headers: Dict[
                             headers2 = { 'x-access-token': 'eyJjb3Vyc2VJZCI6IjQ1NjY4NyIsInR1dG9ySWQiOm51bGwsIm9yZ0lkIjo0ODA2MTksImNhdGVnb3J5SWQiOm51bGx9'}
                             task = asyncio.create_task(process_cpwp_url(url_val, name, session, headers2))
                             content_tasks.append((content['id'], task))
+                            video_count += 1
                         else:
-                            name: str = content['name']
-                            url_val: str | None = content.get('url')
                             if url_val:
                                 fetched_urls.add(url_val)
                                 results.append(f"{name}:{url_val}\n")
@@ -229,8 +203,7 @@ async def get_cpwp_course_content(session: aiohttp.ClientSession, headers: Dict[
                                 else:
                                     image_count += 1
                 
-                # Add small delay between chunks to avoid rate limits
-                await asyncio.sleep(1)
+                await asyncio.sleep(1)  # Rate limiting delay
                             
     except asyncio.TimeoutError:
         logging.error(f"Timeout while fetching content list for folder {folder_id}")
@@ -266,16 +239,14 @@ async def get_cpwp_course_content(session: aiohttp.ClientSession, headers: Dict[
                     logging.error(f"Task failed with exception: {result}")
                 elif result:
                     results.append(result)
-                    video_count += 1
             
-            # Add small delay between chunks
             await asyncio.sleep(1)
             
         except asyncio.TimeoutError:
             logging.error(f"Timeout while gathering results chunk {i//chunk_size + 1}")
             continue
     
-    # Process folder tasks similarly
+    # Process folder tasks
     for i in range(0, len(folder_tasks), chunk_size):
         chunk = folder_tasks[i:i + chunk_size]
         try:
@@ -295,7 +266,6 @@ async def get_cpwp_course_content(session: aiohttp.ClientSession, headers: Dict[
                     pdf_count += nested_pdf_count
                     image_count += nested_image_count
             
-            # Add small delay between chunks
             await asyncio.sleep(1)
             
         except asyncio.TimeoutError:
@@ -311,19 +281,21 @@ async def process_cpwp(bot: Client, m: Message, user_id: int):
     CHANNEL_ID = -1002601604234
     
     headers = {
+        'accept': 'application/json, text/plain, */*',
         'accept-encoding': 'gzip',
         'accept-language': 'EN',
-        'api-version'    : '35',
-        'app-version'    : '1.4.73.2',
-        'build-number'   : '35',
-        'connection'     : 'Keep-Alive',
-        'content-type'   : 'application/json',
-        'device-details' : 'Xiaomi_Redmi 7_SDK-32',
-        'device-id'      : 'c28d3cb16bbdac01',
-        'host'           : 'api.classplusapp.com',
-        'region'         : 'IN',
-        'user-agent'     : 'Mobile-Android',
-        'webengage-luid' : '00000187-6fe4-5d41-a530-26186858be4c'
+        'api-version': '35',
+        'app-version': '1.4.73.2',
+        'build-number': '35',
+        'connection': 'Keep-Alive',
+        'content-type': 'application/json',
+        'device-details': 'Xiaomi_Redmi 7_SDK-32',
+        'device-id': 'c28d3cb16bbdac01',
+        'host': 'api.classplusapp.com',
+        'region': 'IN',
+        'user-agent': 'Mobile-Android',
+        'webengage-luid': '00000187-6fe4-5d41-a530-26186858be4c',
+        'x-access-token': 'eyJhbGciOiJIUzM4NCIsInR5cCI6IkpXVCJ9.eyJpZCI6MTIyMDc4ODg0LCJvcmdJZCI6NzExNTI4LCJ0eXBlIjoxLCJtb2JpbGUiOiI5MTg2MDAzOTAyODgiLCJuYW1lIjoiU2Fua2V0IFNvbmFyIiwiZW1haWwiOiJoanMuc2Fua2V0QGdtYWlsLmNvbSIsImlzSW50ZXJuYXRpb25hbCI6MCwiZGVmYXVsdExhbmd1YWdlIjoiRU4iLCJjb3VudHJ5Q29kZSI6IklOIiwiY291bnRyeUlTTyI6IjkxIiwidGltZXpvbmUiOiJHTVQrNTozMCIsImlzRGl5Ijp0cnVlLCJvcmdDb2RlIjoidWphbGFmIiwiaXNEaXlTdWJhZG1pbiI6MCwiZmluZ2VycHJpbnRJZCI6IjE3MjAxMDU1NjkwMjYiLCJpYXQiOjE3NDkyNTUzOTUsImV4cCI6MTc0OTg2MDE5NX0.uKdyXfFDtcdyaUItjc_G1ALYwtKxVyuG_SnPhRPa2cNy9Tzd0TaXdXNw1d2cUurv'
     }
 
     loop = asyncio.get_event_loop()
@@ -613,6 +585,16 @@ async def process_cpwp(bot: Client, m: Message, user_id: int):
                                                 file_name=f"{clean_batch_name}_{batch_index}.txt"
                                             )
                                             
+                                        # Add summary message that stays for 5 seconds
+                                        summary_msg = await m.reply_text(
+                                            f"**📊 Content Summary for {clean_batch_name}**\n\n"
+                                            f"🎬 **Total Videos/Images**: {video_count}\n"
+                                            f"📁 **Total PDFs**: {pdf_count}\n\n"
+                                            f"⌛ This message will disappear in 5 seconds..."
+                                        )
+                                        await asyncio.sleep(5)
+                                        await summary_msg.delete()
+                                        
                                         # Send original file to logs
                                         with open(original_filename, 'rb') as f:
                                             await app.send_document(
