@@ -13,6 +13,7 @@ from Extractor import app
 from config import OWNER_ID, CHANNEL_ID
 from Extractor.core import script
 from Extractor.core.func import subscribe, chk_user
+# from Extractor.modules.cdsfree import handle_cds_journey, handle_cds_callback, handle_batch_message
 # from Extractor.modules.appex_v1 import api_v1
 # from Extractor.modules.appex_v2 import appex_v2_txt
 # from Extractor.modules.appex_v3 import appex_v5_txt
@@ -39,6 +40,7 @@ from Extractor.modules.enc import *
 from Extractor.modules.freecp import *
 from Extractor.modules.freeappx import *
 from Extractor.modules.freepw import *
+# from Extractor.modules.cds import handle_cds_callback
 
 from Extractor.core.mongo import plans_db
 from telegram import Update
@@ -80,50 +82,40 @@ custom_button = [[
                   InlineKeyboardButton("⚡ Pᴡ ⚡", callback_data="pwwp"),
                   InlineKeyboardButton("🔮 Aᴘᴘx 🔮", callback_data="appxwp"),
                 ],[
-                  InlineKeyboardButton("🎯 CʟᴀssPʟᴜs 🎯", callback_data="cpwp")
+                  InlineKeyboardButton("🎯 CʟᴀssPʟᴜs 🎯", callback_data="cpwp"),
+                  InlineKeyboardButton("🎓 CDS Jᴏᴜʀɴᴇʏ 🎓", callback_data="cds_journey_free")
                 ],[
                   InlineKeyboardButton("𝐁 𝐀 𝐂 𝐊", callback_data="modes_")
                 ]]
 
 button1 = [              
                 [
-                    # InlineKeyboardButton("👑 Aᴘᴘx", callback_data="appx_"),
-                    InlineKeyboardButton("👑 Apni Kaksha", callback_data="ak_"),
-                    # InlineKeyboardButton("👑 Aᴘᴘx Oᴛᴘ", callback_data="appxotp_")
+                    InlineKeyboardButton("👑 Aᴘɴɪ Kᴀᴋsʜᴀ", callback_data="ak_"),
+                    InlineKeyboardButton("👑 Aᴅᴅᴀ 𝟸𝟺𝟽", callback_data="adda_")
                 ],
                 [
-                    InlineKeyboardButton("👑 Aᴅᴅᴀ 𝟸𝟺𝟽", callback_data="adda_"),
-                    InlineKeyboardButton("👑 CʟᴀssPʟᴜs", callback_data="classplus_")
+                    InlineKeyboardButton("👑 CʟᴀssPʟᴜs", callback_data="classplus_"),
+                    InlineKeyboardButton("👑 Kʜᴀɴ Gs", callback_data="khan_")
                 ],
                 [
-                    InlineKeyboardButton("👑 Kʜᴀɴ Gs", callback_data="khan_"),   
-                    InlineKeyboardButton("👑 Pʜʏsɪᴄs Wᴀʟʟᴀʜ", callback_data="pw_")    
+                    InlineKeyboardButton("👑 Pʜʏsɪᴄs Wᴀʟʟᴀʜ", callback_data="pw_"),
+                    InlineKeyboardButton("👑 Sᴛᴜᴅʏ IQ", callback_data="iq_")
                 ],
                 [
-                    InlineKeyboardButton("👑 Sᴛᴜᴅʏ IQ", callback_data="iq_"),
-                    InlineKeyboardButton("👑 Kᴅ Cᴀᴍᴘᴜs", callback_data="kdlive_")         
+                    InlineKeyboardButton("👑 Kᴅ Cᴀᴍᴘᴜs", callback_data="kdlive_"),
+                    InlineKeyboardButton("👑 Uᴛᴋᴀʀsʜ", callback_data="utkarsh_"),
+                    InlineKeyboardButton("👑 CDS Jᴏᴜʀɴᴇʏ", callback_data="cds_journey")
                 ],
                 [
-                    InlineKeyboardButton("👑  ✖️", callback_data="maintainer_"),   
-                    InlineKeyboardButton("👑 Uᴛᴋᴀʀsʜ", callback_data="utkarsh_") 
+                    InlineKeyboardButton("👑 Mʏ Pᴀᴛʜsʜᴀʟᴀ", callback_data="my_pathshala_"),
+                    InlineKeyboardButton("👑 ExᴀᴍPᴜʀ", callback_data="exampur_txt")
                 ],
                 [
-                    InlineKeyboardButton("👑 Vɪsɪᴏɴ Iᴀs ✖️", callback_data="maintainer_")
-                ],
-                [
-                   # InlineKeyboardButton("CʟᴀssPʟᴜs", callback_data="classplus_"),
-                    InlineKeyboardButton("👑 Mʏ Pᴀᴛʜsʜᴀʟᴀ", callback_data="my_pathshala_") ,
-                    InlineKeyboardButton("👑 ExᴀᴍPᴜʀ", callback_data="exampur_txt") 
-
-
-                ],
-                [
+                    InlineKeyboardButton("👑 Vɪsɪᴏɴ Iᴀs", callback_data="vision_ias_"),
                     InlineKeyboardButton("👑 Rᴀɴᴋᴇʀs Gᴜʀᴜᴋᴜʟ", callback_data="maintainer_")
                 ],
                 [
-                  #  InlineKeyboardButton("﹤", callback_data="next_4"),
-                    InlineKeyboardButton("ʙ ᴀ ᴄ ᴋ", callback_data="modes_"),
-                  #  InlineKeyboardButton("﹥", callback_data="next_1")
+                    InlineKeyboardButton("𝐁 𝐀 𝐂 𝐊", callback_data="modes_")
                 ]
                 ]
 
@@ -484,6 +476,7 @@ async def career_will_callback(app: Client, callback_query: CallbackQuery):
 
 @app.on_callback_query()
 async def handle_callback(client, query):
+    
     if query.data=="home_":        
         await query.message.edit_text(
               script.START_TXT.format(query.from_user.mention),
@@ -576,6 +569,8 @@ async def handle_callback(client, query):
         api = "perfectionacademyapi.appx.co.in"
         name = "Perfection Academy"
         await appex_v5_txt(app, query.message, api, name)
+      
+    
       
     elif query.data == "e1_coaching":     
         api = "e1coachingcenterapi.classx.co.in"
@@ -770,6 +765,8 @@ async def handle_callback(client, query):
     elif query.data == "utkarsh_":
     
         await handle_utk_logic(app, query.message)
+ 
+
     
     elif query.data == "pw_":
         await pw_login(app, query.message)
@@ -1075,6 +1072,8 @@ async def html_to_text_command(client: Client, message: Message):
         
     except Exception as e:
         await message.reply_text(f"❌ Error: {str(e)}")
+
+
 
     
 
