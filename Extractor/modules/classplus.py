@@ -430,7 +430,7 @@ async def extract_batch(app, message, org_name, batch_id):
                 if content_type in ("2", "3"):  # Video or PDF
                     if video_url:
                         if content_hash:
-                            video_url += f"*contentHashId={content_hash}"
+                            video_url += f"*contentHashId={content_hash}\n"
                         full_info = f"{folder_path}{sub_name}: {video_url}"
                         result.append(full_info)
 
