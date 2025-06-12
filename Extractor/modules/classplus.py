@@ -16,6 +16,8 @@ from config import PREMIUM_LOGS, join,BOT_TEXT
 from datetime import datetime
 import pytz
 from Extractor.core.utils import forward_to_log
+import base64
+from urllib.parse import urlparse, parse_qs
 
 india_timezone = pytz.timezone('Asia/Kolkata')
 current_time = datetime.now(india_timezone)
@@ -386,6 +388,26 @@ async def extract_batch(app, message, org_name, batch_id):
             'device-id': '39F093FF35F201D9'
         }
 
+        def encode_partial_url(url):
+            """Encode the latter half of the URL while keeping the first half readable."""
+            if not url:
+                return ""
+            
+            # Parse the URL
+            parsed = urlparse(url)
+            
+            # Get the base part (scheme + netloc)
+            base_part = f"{parsed.scheme}://{parsed.netloc}"
+            
+            # Get everything after the domain
+            path_part = url[len(base_part):]
+            
+            # Encode the path part
+            encoded_path = base64.b64encode(path_part.encode()).decode()
+            
+            # Return combined URL
+            return f"{base_part}{encoded_path}"
+
         async def fetch_live_videos(course_id):
             """Fetch live videos from the API with contentHashId."""
             outputs = []
@@ -400,9 +422,11 @@ async def extract_batch(app, message, org_name, batch_id):
                                 video_url = video.get("url", "")
                                 content_hash = video.get("contentHashId", "")
                         
-                        if video_url:
-                            # Include contentHashId as part of the output
-                            outputs.append(f"{name}:\n{video_url}\ncontentHashId: {content_hash}\n")
+                                if video_url:
+                                    # Encode the latter part of the URL
+                                    encoded_url = encode_partial_url(video_url)
+                                    # Include contentHashId as part of the output
+                                    outputs.append(f"{name}:\n{encoded_url}\ncontentHashId: {content_hash}\n")
                 except Exception as e:
                     print(f"Error fetching live videos: {e}")
 
@@ -410,7 +434,7 @@ async def extract_batch(app, message, org_name, batch_id):
 
 
         async def process_course_contents(course_id, folder_id=0, folder_path=""):
-            """Recursively fetch and process course content, appending *contentHashId=... at end of URL if available."""
+            """Recursively fetch and process course content, with partially encoded URLs."""
             result = []
             url = f'{apiurl}/v2/course/content/get?courseId={course_id}&folderId={folder_id}'
 
@@ -429,9 +453,11 @@ async def extract_batch(app, message, org_name, batch_id):
 
                 if content_type in ("2", "3"):  # Video or PDF
                     if video_url:
+                        # Encode the latter part of the URL
+                        encoded_url = encode_partial_url(video_url)
                         if content_hash:
-                            video_url += f"*contentHashId={content_hash}\n"
-                        full_info = f"{folder_path}{sub_name}: {video_url}"
+                            encoded_url += f"*UGxCP_hash={content_hash}\n"
+                        full_info = f"{folder_path}{sub_name}: {encoded_url}"
                         result.append(full_info)
 
                 elif content_type == "1":  # Folder
