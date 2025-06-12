@@ -389,53 +389,63 @@ async def extract_batch(app, message, org_name, batch_id):
 # inside your extract_batch function, only replacing process_course_contents
 
         async def process_course_contents(course_id, folder_id=0, folder_path=""):
-            """Fetch and process course content recursively."""
-            result = []
-            url = f'{apiurl}/v2/course/content/get?courseId={course_id}&folderId={folder_id}'
+    """Recursively fetch and process course content, appending *contentHashId=... at end of URL if available."""
+    result = []
+    url = f'{apiurl}/v2/course/content/get?courseId={course_id}&folderId={folder_id}'
 
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, headers=headers) as resp:
-                    course_data = await resp.json()
-                    course_data = course_data["data"]["courseContent"]
-                    
-            tasks = []
-            for item in course_data:
-                content_type = str(item['contentType'])
-                sub_id = item['id']
-                sub_name = item['name']
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url, headers=headers) as resp:
+            course_data = await resp.json()
+            course_data = course_data["data"]["courseContent"]
 
-                if content_type in ("2", "3"):  # Video or PDF
-                    url = item["url"]
-                    full_name = f"{folder_path}{sub_name}: {url}\n"
-                    result.append(full_name)
-                elif content_type == "1":  # Folder
-                 new_folder_path = f"{folder_path}{sub_name} - "
-                 tasks.append(process_course_contents(course_id, sub_id, new_folder_path))
+    tasks = []
+    for item in course_data:
+        content_type = str(item.get("contentType"))
+        sub_id = item.get("id")
+        sub_name = item.get("name", "Untitled")
+        video_url = item.get("url", "")
+        content_hash = item.get("contentHashId", "")
 
-            sub_contents = await asyncio.gather(*tasks)
-            for sub_content in sub_contents:
-                result.extend(sub_content)
+        if content_type in ("2", "3"):  # Video or PDF
+            if video_url:
+                if content_hash:
+                    video_url += f"*contentHashId={content_hash}"
+                full_info = f"{folder_path}{sub_name}: {video_url}"
+                result.append(full_info)
 
-            return result
+        elif content_type == "1":  # Folder
+            new_folder_path = f"{folder_path}{sub_name} - "
+            tasks.append(process_course_contents(course_id, sub_id, new_folder_path))
+
+    sub_contents = await asyncio.gather(*tasks)
+    for sub_content in sub_contents:
+        result.extend(sub_content)
+
+    return result
+
 
         async def fetch_live_videos(course_id):
-            """Fetch live videos from the API."""
-            outputs = []
-            async with aiohttp.ClientSession() as session:
-                try:
-                    url = f"{apiurl}/v2/course/live/list/videos?type=2&entityId={course_id}&limit=9999&offset=0"
-                    async with session.get(url, headers=headers) as response:
-                        j = await response.json()
-                        if "data" in j and "list" in j["data"]:
-                            for video in j["data"]["list"]:
-                                name = video.get("name", "Unknown Video")
-                                video_url = video.get("url", "")
-                                if video_url:
-                                    outputs.append(f"{name}: {video_url}\n")
-                except Exception as e:
-                    print(f"Error fetching live videos: {e}")
+    """Fetch live videos from the API with contentHashId."""
+    outputs = []
+    async with aiohttp.ClientSession() as session:
+        try:
+            url = f"{apiurl}/v2/course/live/list/videos?type=2&entityId={course_id}&limit=9999&offset=0"
+            async with session.get(url, headers=headers) as response:
+                j = await response.json()
+                if "data" in j and "list" in j["data"]:
+                    for video in j["data"]["list"]:
+                        name = video.get("name", "Unknown Video")
+                        video_url = video.get("url", "")
+                        content_hash = video.get("contentHashId", "")
+                        
+                        if video_url:
+                            # Include contentHashId as part of the output
+                            outputs.append(f"{name}:\n{video_url}\ncontentHashId: {content_hash}\n")
+        except Exception as e:
+            print(f"Error fetching live videos: {e}")
 
-            return outputs
+    return outputs
+
 
         async def write_to_file(extracted_data):
             """Write data to a text file asynchronously."""
