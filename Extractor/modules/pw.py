@@ -20,24 +20,21 @@ india_timezone = pytz.timezone('Asia/Kolkata')
 current_time = datetime.now(india_timezone)
 time_new = current_time.strftime("%d-%m-%Y %I:%M %p")
 
-def extract_mpd_info(url):
-    # Extract base MPD URL (everything before parentId if it exists)
-    base_url = url.split('parentId=')[0].rstrip('&') if 'parentId=' in url else url
+def extract_mpd_info(url, content_id=None, batch_id=None):
+    """Extract MPD URL info and handle PW's specific URL format"""
+    # For cloudfront URLs, we use content_id as childId and batch_id as parentId
+    if 'cloudfront.net' in url:
+        return url, batch_id, content_id
     
-    # Extract parentId and childId
+    # Handle regular URLs with parentId/childId
+    base_url = url.split('parentId=')[0].rstrip('&') if 'parentId=' in url else url
     parent_match = re.search(r'parentId=([^&]+)', url)
     child_match = re.search(r'childId=([^&]+)', url)
     
-    parent_id = parent_match.group(1) if parent_match else None
-    child_id = child_match.group(1) if child_match else None
+    parent_id = parent_match.group(1) if parent_match else batch_id
+    child_id = child_match.group(1) if child_match else content_id
     
-    # If we have both IDs, combine them with the base URL
-    if parent_id and child_id:
-        final_url = f"{base_url}?parentId={parent_id}&childId={child_id}"
-    else:
-        final_url = base_url
-        
-    return final_url
+    return base_url, parent_id, child_id
 
 def clean_text(text):
     if not text:
@@ -48,6 +45,15 @@ def clean_text(text):
     # Replace problematic characters
     text = text.replace(":", "_").replace("/", "_").replace("|", "_").replace("\\", "_")
     return text
+
+def format_content_line(name, url, content_type="", parent_id=None, child_id=None):
+    """Format content line with modern design and metadata"""
+    name = clean_text(name)
+    prefix = f"[{content_type}] " if content_type else ""
+    
+    if parent_id and child_id:
+        return f"{prefix}{name}:{url}?parentId={parent_id}&childId={child_id}"
+    return f"{prefix}{name}:{url}"
 
 @app.on_message(filters.command(["pw"]))
 async def pw_login(app, message):
@@ -182,14 +188,28 @@ async def pw_login(app, message):
             await message.reply_text("❌ **No subjects found for the selected course.**")
             return
 
+        progress_msg = await app.send_message(
+            chat_id=message.chat.id, 
+            text="🚀 **Initializing Extraction Process...**"
+        )
+
+        all_subjects_progress = {}
+        total_links = 0
+
+        async def update_progress():
+            progress_text = "📊 **Extraction Progress**\n\n"
+            for subject, status in all_subjects_progress.items():
+                icon = "✅" if status else "⏳"
+                progress_text += f"{icon} **{subject}**\n"
+            progress_text += f"\n📝 Total Links: {total_links}"
+            await progress_msg.edit_text(progress_text)
+
         with open(filename, 'w', encoding='utf-8') as f:
             for subject in subjects:
                 si = subject.get("_id")
                 sn = clean_text(subject.get("subject", ""))
-                await app.send_message(
-                    chat_id=message.chat.id, 
-                    text=f"📘 **Processing Subject:** **{sn}**... ⏳"
-                )
+                all_subjects_progress[sn] = False
+                await update_progress()
                 
                 for page in range(1, 12):
                     content_response = requests.get(
@@ -199,34 +219,55 @@ async def pw_login(app, message):
                     
                     for item in content_response.get("data", []):
                         try:
+                            content_id = item.get("_id")  # This is the child ID
                             topic = clean_text(item.get("topic", ""))
                             url = item.get("url", "")
+                            content_type = item.get("lectureType", "video").lower()
+                            
                             if url:
                                 if '.mpd' in url:
-                                    final_url = extract_mpd_info(url)
-                                    f.write(f"{topic}:{final_url}\n")
+                                    final_url, parent_id, child_id = extract_mpd_info(url, content_id, target_id)
+                                    line = format_content_line(topic, final_url, content_type, parent_id, child_id)
+                                    f.write(line + "\n")
+                                    total_links += 1
                                 else:
-                                    f.write(f"{topic}:{url}\n")
+                                    line = format_content_line(topic, url, content_type)
+                                    f.write(line + "\n")
+                                    total_links += 1
 
                             for hw in item.get("homeworkIds", []):
+                                hw_id = hw.get("_id")  # Child ID for homework
                                 for attachment in hw.get("attachmentIds", []):
                                     try:
                                         name = clean_text(attachment.get("name", ""))
                                         base_url = attachment.get("baseUrl", "")
                                         key = attachment.get("key", "")
+                                        content_type = "notes"
                                         if key:
                                             full_url = f"{base_url}{key}"
                                             if '.mpd' in full_url:
-                                                final_url = extract_mpd_info(full_url)
-                                                f.write(f"{name}:{final_url}\n")
+                                                final_url, parent_id, child_id = extract_mpd_info(full_url, hw_id, target_id)
+                                                line = format_content_line(name, final_url, content_type, parent_id, child_id)
+                                                f.write(line + "\n")
+                                                total_links += 1
                                             else:
-                                                f.write(f"{name}:{full_url}\n")
+                                                line = format_content_line(name, full_url, content_type)
+                                                f.write(line + "\n")
+                                                total_links += 1
                                     except Exception as e:
                                         print(f"Error processing attachment: {str(e)}")
                                         continue
                         except Exception as e:
                             print(f"Error processing item: {str(e)}")
                             continue
+                
+                all_subjects_progress[sn] = True
+                await update_progress()
+            
+            # Add join link at the end of the file
+            f.write("\n\n━━━━━━━━━━━━━━━━━━━━━\n")
+            f.write("🌟 Join Us: @UGxPrivate\n")
+            f.write("━━━━━━━━━━━━━━━━━━━━━")
 
         up = (f"**Login Succesfull for PW:** `{token}`")
         captionn = (f" App Name : Physics Wallah \n\n PURCHASED BATCHES : {batch_text}")
