@@ -60,7 +60,7 @@ buttons = InlineKeyboardMarkup([
                   InlineKeyboardButton("Lᴏɢɪɴ/Wɪᴛʜᴏᴜᴛ Lᴏɢɪɴ", callback_data="modes_")
                 ],[
                   InlineKeyboardButton("🔍 Fɪɴᴅ Aᴘɪ", callback_data="findapi_"),
-                  InlineKeyboardButton("📓 Aᴘᴘx Aᴘᴘs", callback_data="appxlist")
+                  #InlineKeyboardButton("📓 Aᴘᴘx Aᴘᴘs", callback_data="appxlist")
                 ],
                 [
                   InlineKeyboardButton("📝 Tᴇxᴛ ⟷ HTML", callback_data="converter_")
@@ -80,7 +80,7 @@ modes_button = [[
 
 custom_button = [[
                   InlineKeyboardButton("⚡ Pᴡ ⚡", callback_data="pwwp"),
-                  InlineKeyboardButton("🔮 Aᴘᴘx 🔮", callback_data="appxwp"),
+                  #InlineKeyboardButton("🔮 Aᴘᴘx 🔮", callback_data="appxwp"),
                 ],[
                   InlineKeyboardButton("🎯 CʟᴀssPʟᴜs 🎯", callback_data="cpwp")
                   # InlineKeyboardButton("🎓 CDS Jᴏᴜʀɴᴇʏ 🎓", callback_data="cds_journey_free")
@@ -111,8 +111,8 @@ button1 = [
                     InlineKeyboardButton("👑 ExᴀᴍPᴜʀ", callback_data="exampur_txt")
                 ],
                 [
-                    InlineKeyboardButton("👑 Vɪsɪᴏɴ Iᴀs", callback_data="vision_ias_"),
-                    InlineKeyboardButton("👑 Rᴀɴᴋᴇʀs Gᴜʀᴜᴋᴜʟ", callback_data="maintainer_")
+                    #InlineKeyboardButton("👑 Vɪsɪᴏɴ Iᴀs", callback_data="vision_ias_"),
+                    #InlineKeyboardButton("👑 Rᴀɴᴋᴇʀs Gᴜʀᴜᴋᴜʟ", callback_data="maintainer_")
                 ],
                 [
                     InlineKeyboardButton("𝐁 𝐀 𝐂 𝐊", callback_data="modes_")
