@@ -794,20 +794,20 @@ def generate_html(file_name, videos, pdfs, others):
     </div>
     <div class="container-fluid py-5 text-center">
         <h1 class="brand-title mb-4">
-<a href="https://t.me/GodxBots" style="text-decoration: none; color: inherit;">
-  <i class="fas fa-bolt"></i> GOD x UG <i class="fas fa-bolt"></i>
+<a href="https://t.me/+HVvpqDnRjFE3NDhl" style="text-decoration: none; color: inherit;">
+  <i class="fas fa-bolt"></i> Its  UG <i class="fas fa-bolt"></i>
 </a>
 
                 </h1>
         <h2 class="header-title mb-4">{file_name_without_extension}</h2>
         <p class="lead">
-<a href="https://t.me/GodxBots" style="text-decoration: none; color: inherit;">
+<a href="https://t.me/+b6Xmaaj6Yq84YTdh" style="text-decoration: none; color: inherit;">
   <span class="badge bg-primary me-2">
-    <i class="fas fa-robot"></i> Join @GodxBots
+    <i class="fas fa-robot"></i> Join @ItsUGBot
   </span>
 </a>
 
-            <a href="http://t.me/GodxBOts" class="text-decoration-none">
+            <a href="https://t.me/+HVvpqDnRjFE3NDhl" class="text-decoration-none">
                 <span class="badge bg-warning">
                     <i class="fas fa-bolt"></i>UG 
                 </span>
@@ -875,7 +875,7 @@ def generate_html(file_name, videos, pdfs, others):
         f'<div class="item-actions">'
         f'<button class="btn-action view" onclick="viewPDF(\'{obfuscate_url(url)}\')" title="View PDF">'
         f'<i class="fas fa-eye"></i></button>'
-        f'<button class="btn-action download" onclick="downloadFile(\'{obfuscate_url(url)}\', \'{name} - @GodxBots.pdf\')" title="Download PDF">'
+        f'<button class="btn-action download" onclick="downloadFile(\'{obfuscate_url(url)}\', \'{name} - @ItsUGBot.pdf\')" title="Download PDF">'
         f'<i class="fas fa-download"></i></button>'
         f'</div>'
         f'</div>'
