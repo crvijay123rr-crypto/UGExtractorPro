@@ -58,7 +58,7 @@ TIMEOUT = 300  # 5 minutes timeout
 buttons = InlineKeyboardMarkup([
                 [
                   InlineKeyboardButton("ＳＴＡＲＴ", callback_data="modes_")
-                ],
+                ],[
                   InlineKeyboardButton("🔍 Fɪɴᴅ Aᴘɪ", callback_data="findapi_"),
                   InlineKeyboardButton("📓 Aᴘᴘx Aᴘᴘs", callback_data="appxlist")
                 ],
