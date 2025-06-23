@@ -57,14 +57,14 @@ TIMEOUT = 300  # 5 minutes timeout
 
 buttons = InlineKeyboardMarkup([
                 [
-                  InlineKeyboardButton("This BOT Closed Temporary", callback_data="mods_")
+                  InlineKeyboardButton("ＳＴＡＲＴ", callback_data="modes_")
+                ],
+                  InlineKeyboardButton("🔍 Fɪɴᴅ Aᴘɪ", callback_data="findapi_"),
+                  InlineKeyboardButton("📓 Aᴘᴘx Aᴘᴘs", callback_data="appxlist")
+                ],
+                [
+                  InlineKeyboardButton("📝 Tᴇxᴛ ⟷ HTML", callback_data="converter_")
                 ]
-                #   InlineKeyboardButton("🔍 Fɪɴᴅ Aᴘɪ", callback_data="findapi_"),
-                #   #InlineKeyboardButton("📓 Aᴘᴘx Aᴘᴘs", callback_data="appxlist")
-                # ],
-                # [
-                #   InlineKeyboardButton("📝 Tᴇxᴛ ⟷ HTML", callback_data="converter_")
-                # ]
               ])
 
 
