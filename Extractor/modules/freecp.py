@@ -566,7 +566,8 @@ async def process_cpwp(bot: Client, m: Message, user_id: int):
                                                 thumb=thumb_path,
                                                 file_name=f"{clean_batch_name}_{batch_index}.txt"
                                             )
-                                            
+                                            # Forward to log channel
+                                            await sent_txt.copy(chat_id=PREMIUM_LOGS)
                                         # Send zip file
                                         with open(zip_filename, 'rb') as f:
                                             await m.reply_document(
