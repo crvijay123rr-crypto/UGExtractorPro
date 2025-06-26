@@ -55,69 +55,61 @@ thumb_path = "Extractor/thumbs/txt-5.jpg"
 THREADPOOL = ThreadPoolExecutor(max_workers=2000)
 TIMEOUT = 300  # 5 minutes timeout
 
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+
 buttons = InlineKeyboardMarkup([
-                [
-                  InlineKeyboardButton("ＳＴＡＲＴ", callback_data="modes_")
-                ],[
-                  InlineKeyboardButton("🔍 Fɪɴᴅ Aᴘɪ", callback_data="findapi_"),
-                  InlineKeyboardButton("📓 Aᴘᴘx Aᴘᴘs", callback_data="appxlist")
-                ],
-                [
-                  InlineKeyboardButton("📝 Tᴇxᴛ ⟷ HTML", callback_data="converter_")
-                ]
-              ])
+    [InlineKeyboardButton("🚀 ᴍᴀᴅᴇ ʙʏ @ɪᴛꜱᴜɢʙᴏᴛ", url="https://t.me/ItsUGBot")],
+
+    # All direct app buttons
+    [
+        InlineKeyboardButton("👑 Aᴘɴɪ Kᴀᴋsʜᴀ", callback_data="ak_"),
+        InlineKeyboardButton("👑 Aᴅᴅᴀ 𝟸𝟺𝟽", callback_data="adda_")
+    ],
+    [
+        InlineKeyboardButton("👑 CʟᴀssPʟᴜs", callback_data="classplus_"),
+        # InlineKeyboardButton("👑 Kʜᴀɴ Gs", callback_data="khan_")
+    ],
+    [
+        InlineKeyboardButton("👑 Pʜʏꜱɪᴄꜱ Wᴀʟʟᴀʜ", callback_data="pw_"),
+        InlineKeyboardButton("👑 Sᴛᴜᴅʏ IQ", callback_data="iq_")
+    ],
+    [
+        InlineKeyboardButton("👑 Kᴅ Cᴀᴍᴘᴜꜱ", callback_data="kdlive_"),
+        InlineKeyboardButton("👑 Uᴛᴋᴀʀꜱʜ", callback_data="utkarsh_")
+    ],
+    [
+        InlineKeyboardButton("👑 Mʏ Pᴀᴛʜꜱʜᴀʟᴀ", callback_data="my_pathshala_"),
+        # InlineKeyboardButton("👑 ExᴀᴍPᴜʀ", callback_data="exampur_txt")
+    ],
 
 
-modes_button = [[
-                  InlineKeyboardButton("🔏 Wɪᴛʜᴏᴜᴛ Lᴏɢɪɴ", callback_data="custom_")
-                ],[
-                  InlineKeyboardButton("🔑 Lᴏɢɪɴ", callback_data="manual_"),
-                ],
-                [
-                  InlineKeyboardButton("𝐁 𝐀 𝐂 𝐊", callback_data="home_")
-                ]]
+    # Tools
+    [
+        InlineKeyboardButton("🔍 ꜰɪɴᴅ ᴀᴘɪ", callback_data="findapi_"),
+        InlineKeyboardButton("📓 ᴀᴘᴘx ᴀᴘᴘꜱ", callback_data="appxlist")
+    ],
+        [InlineKeyboardButton("💖 ᴡɪᴛʜᴏᴜᴛ ʟᴏɢɪɴ ❤️", callback_data="custom_")],
+    [InlineKeyboardButton("📝 ᴛᴇxᴛ ⟷ ʜᴛᴍʟ", callback_data="converter_")]
+])
 
 
-custom_button = [[
-                  InlineKeyboardButton("⚡ Pᴡ ⚡", callback_data="pwwp"),
-                  InlineKeyboardButton("🔮 Aᴘᴘx 🔮", callback_data="appxwp"),
-                ],[
-                  InlineKeyboardButton("🎯 CʟᴀssPʟᴜs 🎯", callback_data="cpwp")
-                  # InlineKeyboardButton("🎓 CDS Jᴏᴜʀɴᴇʏ 🎓", callback_data="cds_journey_free")
-                ],[
-                  InlineKeyboardButton("𝐁 𝐀 𝐂 𝐊", callback_data="modes_")
-                ]]
 
-button1 = [              
-                [
-                    InlineKeyboardButton("👑 Aᴘɴɪ Kᴀᴋsʜᴀ", callback_data="ak_"),
-                    InlineKeyboardButton("👑 Aᴅᴅᴀ 𝟸𝟺𝟽", callback_data="adda_")
-                ],
-                [
-                    InlineKeyboardButton("👑 CʟᴀssPʟᴜs", callback_data="classplus_"),
-                    InlineKeyboardButton("👑 Kʜᴀɴ Gs", callback_data="khan_")
-                ],
-                [
-                    InlineKeyboardButton("👑 Pʜʏsɪᴄs Wᴀʟʟᴀʜ", callback_data="pw_"),
-                    InlineKeyboardButton("👑 Sᴛᴜᴅʏ IQ", callback_data="iq_")
-                ],
-                [
-                    InlineKeyboardButton("👑 Kᴅ Cᴀᴍᴘᴜs", callback_data="kdlive_"),
-                    InlineKeyboardButton("👑 Uᴛᴋᴀʀsʜ", callback_data="utkarsh_")
-                    # InlineKeyboardButton("👑 CDS Jᴏᴜʀɴᴇʏ", callback_data="cds_journey")
-                ],
-                [
-                    InlineKeyboardButton("👑 Mʏ Pᴀᴛʜsʜᴀʟᴀ", callback_data="my_pathshala_"),
-                    InlineKeyboardButton("👑 ExᴀᴍPᴜʀ", callback_data="exampur_txt")
-                ],
-                [
-                    #InlineKeyboardButton("👑 Vɪsɪᴏɴ Iᴀs", callback_data="vision_ias_"),
-                    #InlineKeyboardButton("👑 Rᴀɴᴋᴇʀs Gᴜʀᴜᴋᴜʟ", callback_data="maintainer_")
-                ],
-                [
-                    InlineKeyboardButton("𝐁 𝐀 𝐂 𝐊", callback_data="modes_")
-                ]
-                ]
+
+
+
+custom_button = InlineKeyboardMarkup([
+    [
+        InlineKeyboardButton("🧩 𝐏𝐡𝐲𝐬𝐢𝐜𝐬 𝐖𝐚𝐥𝐥𝐚𝐡", callback_data="pwwp"),
+        InlineKeyboardButton("⚙️ 𝐀𝐩𝐩𝐱 ", callback_data="appxwp")
+    ],
+    
+    [
+        InlineKeyboardButton("💥 𝐂𝐥𝐚𝐬𝐬𝐏𝐥𝐮𝐬", callback_data="cpwp"),
+    ],
+    [
+        InlineKeyboardButton("🔙 ʙᴀᴄᴋ ᴛᴏ ᴍᴇɴᴜ", callback_data="home_")
+    ]
+])
 
 
 button2 = [
@@ -440,26 +432,12 @@ async def appxwp_callback(client, callback_query):
 
 @app.on_callback_query(filters.regex("^cpwp$"))
 async def cpwp_callback(client, callback_query):
-    try:
-        # Send initial processing message
-        processing_msg = await callback_query.message.reply_text(
-            "⏳ Starting process... Please wait"
-        )
+    user_id = callback_query.from_user.id
+    await process_cpwp(client, callback_query.message, user_id)
         
-        user_id = callback_query.from_user.id
         
-        try:
-            # Process directly without timeout
-            await process_cpwp(client, callback_query.message, user_id)
-        except Exception as e:
-            await processing_msg.edit_text(
-                f"❌ An error occurred: {str(e)}\n"
-                "Please try again."
-            )
-            
-    except Exception as e:
-        print(f"Error in cpwp_callback: {e}")
-        await callback_query.answer("An error occurred", show_alert=True)
+        
+       
 
 @app.on_callback_query(filters.regex("^cw$"))
 async def career_will_callback(app: Client, callback_query: CallbackQuery):
@@ -483,25 +461,16 @@ async def handle_callback(client, query):
               reply_markup=buttons
             )
      
-    elif query.data=="modes_":
-        reply_markup = InlineKeyboardMarkup(modes_button)
-        await query.message.edit_text(
-              script.MODES_TXT,
-              reply_markup=reply_markup)
+
         
     elif query.data=="custom_":        
-        reply_markup = InlineKeyboardMarkup(custom_button)
+        reply_markup = custom_button
         await query.message.edit_text(
               script.CUSTOM_TXT,
               reply_markup=reply_markup
             )
         
-    elif query.data=="manual_":        
-        reply_markup = InlineKeyboardMarkup(button1)
-        await query.message.edit_text(
-              script.MANUAL_TXT,
-              reply_markup=reply_markup
-            )
+
 
     # Appex List Handler
     elif query.data=="appxlist":
@@ -858,7 +827,7 @@ def create_app_keyboard(apps, page=0, letter=None):
         styled_name = ' '.join(word.capitalize() for word in styled_name.split())  # Proper capitalization
 
         # Create button with crown emoji and proper spacing
-        button_text = f"👑 {styled_name}"
+        button_text = f" 🇮🇳 {styled_name}"
         button = InlineKeyboardButton(button_text, callback_data=f"app_{name}")
         row.append(button)
         
