@@ -14,21 +14,31 @@ from pyrogram import Client, filters, idle
 from pyrogram.types import Message
 # from pyrogram.errors import ListenerTimeout
 from subprocess import getstatusoutput
-from datetime import datetime
+from datetime import datetime, timedelta
+
 import pytz
 # from Extractor.modules.enc import process_file_content  # Add encryption import
+import zipfile
 
-
+# Global variables and constants
 join = config.join
 india_timezone = pytz.timezone('Asia/Kolkata')
 current_time = datetime.now(india_timezone)
 time_new = current_time.strftime("%d-%m-%Y %I:%M %p")
 
+# Format time taken
+def format_time_taken(start_time: float) -> str:
+    end_time = time.time()
+    time_taken = end_time - start_time
+    formatted_time = str(timedelta(seconds=int(time_taken)))
+    return formatted_time
+
 THREADPOOL = ThreadPoolExecutor(max_workers=5000)
 
 async def download_thumbnail(session: aiohttp.ClientSession, url: str) -> str | None:
+    """Download thumbnail from URL"""
     try:
-        # Create a temporary filename
+        # Create a temporary filename with timestamp
         thumb_path = f"thumb_{int(time.time())}.jpg"
         
         async with session.get(url, timeout=30) as response:
@@ -60,7 +70,25 @@ def create_html_file(file_name, batch_name, contents):
         fp.write(file_content.replace('{{tbody_content}}', tbody).replace('{{batch_name}}', title))
         
 
+def clean_filename(name: str) -> str:
+    """Clean filename to be Windows-compatible"""
+    # Remove invalid characters and common problematic characters
+    invalid_chars = '<>:"/\\|?*\n\r\t'
+    name = ''.join(char if char not in invalid_chars else '_' for char in name)
+    # Remove trailing spaces and periods
+    name = name.strip('. ')
+    # Replace multiple spaces/underscores with single one
+    name = re.sub(r'[_\s]+', '_', name)
+    # Limit length
+    if len(name) > 180:
+        name = name[:177] + '...'
+    return name
 
+def create_safe_path(*parts: str) -> str:
+    """Create a safe path from parts"""
+    # Clean each part and join with forward slashes
+    cleaned_parts = [clean_filename(part) for part in parts if part]
+    return '/'.join(cleaned_parts)
 
 #======================================================================================================================
 
@@ -109,30 +137,61 @@ async def fetch_cpwp_signed_url(url_val: str, name: str, session: aiohttp.Client
 async def process_cpwp_url(url_val: str, name: str, session: aiohttp.ClientSession, headers: Dict[str, str]) -> str | None:
     """Process video URLs"""
     try:
+        # Clean up the name - remove extra spaces and special chars
+        clean_name = name.strip().replace('\n', ' ').replace('\r', '')
+        # Get video name from the full path
+        if '][' in clean_name:
+            video_name = clean_name.split(']')[1].strip('[')
+        else:
+            video_name = clean_name
+        
+        # If already a video URL, return as is
         if url_val.endswith(('.m3u8', '.mp4', '.mpd')):
-            return f"{name}:{url_val}\n"
+            return f"{video_name} : {url_val}\n"
             
         # For special cases like testbook or drm content
         if "testbook.com" in url_val or "classplusapp.com/drm" in url_val:
-            return f"{name}:{url_val}\n"
+            return f"{video_name} : {url_val}\n"
             
-        return f"{name}:{url_val}\n"
+        # Transform URLs based on patterns
+        if "media-cdn.classplusapp.com/tencent/" in url_val:
+            url_val = url_val.rsplit('/', 1)[0] + "/master.m3u8"
+        elif "media-cdn.classplusapp.com" in url_val and url_val.endswith('.jpg'):
+            identifier = url_val.split('/')[-3]
+            url_val = f'https://media-cdn.classplusapp.com/alisg-cdn-a.classplusapp.com/{identifier}/master.m3u8'
+        elif "tencdn.classplusapp.com" in url_val and url_val.endswith('.jpg'):
+            identifier = url_val.split('/')[-2]
+            url_val = f'https://media-cdn.classplusapp.com/tencent/{identifier}/master.m3u8'
+        elif "4b06bf8d61c41f8310af9b2624459378203740932b456b07fcf817b737fbae27" in url_val and url_val.endswith('.jpeg'):
+            url_val = f"https://media-cdn.classplusapp.com/alisg-cdn-a.classplusapp.com/b08bad9ff8d969639b2e43d5769342cc62b510c4345d2f7f153bec53be84fe35/{url_val.split('/')[-1].split('.')[0]}/master.m3u8"
+        elif "cpvideocdn.testbook.com" in url_val and url_val.endswith('.png'):
+            match = re.search(r'/streams/([a-f0-9]{24})/', url_val)
+            video_id = match.group(1) if match else url_val.split('/')[-2]
+            url_val = f'https://cpvod.testbook.com/{video_id}/playlist.m3u8'
+        elif "media-cdn.classplusapp.com/drm/" in url_val and url_val.endswith('.png'):
+            video_id = url_val.split('/')[-3]
+            url_val = f'https://media-cdn.classplusapp.com/drm/{video_id}/playlist.m3u8'
+        elif "https://media-cdn.classplusapp.com" in url_val and ("cc/" in url_val or "lc/" in url_val or "uc/" in url_val or "dy/" in url_val) and url_val.endswith('.png'):
+            url_val = url_val.replace('thumbnail.png', 'master.m3u8')
+        elif "https://tb-video.classplusapp.com" in url_val and url_val.endswith('.jpg'):
+            video_id = url_val.split('/')[-1].split('.')[0]
+            url_val = f'https://tb-video.classplusapp.com/{video_id}/master.m3u8'
+            
+        return f"{video_name} : {url_val}\n"
         
     except Exception as e:
         logging.error(f"Error processing URL for {name}: {e}")
         return None
 
 
-async def get_cpwp_course_content(session: aiohttp.ClientSession, headers: Dict[str, str], Batch_Token: str, folder_id: int = 0, limit: int = 9999999999, retry_count: int = 0) -> Tuple[List[str], int, int, int]:
+async def get_cpwp_course_content(session: aiohttp.ClientSession, headers: Dict[str, str], Batch_Token: str, folder_id: int = 0, folder_path: str = "", limit: int = 9999999999, retry_count: int = 0, m: Message = None, status_msg = None) -> Tuple[Dict[str, List[str]], int, int, int]:
     MAX_RETRIES = 5
     TIMEOUT = 120
     fetched_urls: set[str] = set()
-    results: List[str] = []
+    folder_contents: Dict[str, List[str]] = {}
     video_count = 0
     pdf_count = 0
     image_count = 0
-    content_tasks: List[Tuple[int, asyncio.Task[str | None]]] = []
-    folder_tasks: List[Tuple[int, asyncio.Task[List[str]]]] = []
      
     try:
         content_api = f'https://api.classplusapp.com/v2/course/preview/content/list/{Batch_Token}'
@@ -142,142 +201,76 @@ async def get_cpwp_course_content(session: aiohttp.ClientSession, headers: Dict[
             if res.status == 429:
                 wait_time = min(2 ** retry_count, 30)
                 await asyncio.sleep(wait_time)
-                return await get_cpwp_course_content(session, headers, Batch_Token, folder_id, limit, retry_count + 1)
+                return await get_cpwp_course_content(session, headers, Batch_Token, folder_id, folder_path, limit, retry_count + 1, m, status_msg)
                 
             res.raise_for_status()
             res_json = await res.json()
             contents: List[Dict[str, Any]] = res_json['data']
 
-            chunk_size = 5
-            for i in range(0, len(contents), chunk_size):
-                chunk = contents[i:i + chunk_size]
+            # Process folders first
+            folders = [c for c in contents if c['contentType'] == 1]
+            files = [c for c in contents if c['contentType'] != 1]
+            
+            current_folder = folder_path if folder_path else "Root"
+            
+            # Process folders
+            for folder in folders:
+                folder_name = folder['name'].strip()
+                current_path = f"{folder_path}/{folder_name}" if folder_path else folder_name
                 
-                for content in chunk:
-                    if content['contentType'] == 1:  # Folder
-                        folder_task = asyncio.create_task(get_cpwp_course_content(session, headers, Batch_Token, content['id'], retry_count=0))
-                        folder_tasks.append((content['id'], folder_task))
+                nested_contents, v_count, p_count, i_count = await get_cpwp_course_content(
+                    session, headers, Batch_Token, folder['id'], current_path, retry_count=0, m=m, status_msg=status_msg
+                )
+                
+                # Merge nested contents
+                for folder_key, content_list in nested_contents.items():
+                    if folder_key in folder_contents:
+                        folder_contents[folder_key].extend(content_list)
                     else:
-                        name: str = content['name']
-                        url_val: str | None = content.get('url') or content.get('thumbnailUrl')
+                        folder_contents[folder_key] = content_list
+                        
+                video_count += v_count
+                pdf_count += p_count
+                image_count += i_count
 
-                        if not url_val:
-                            logging.warning(f"No URL found for content: {name}")
+            # Process files
+            if current_folder not in folder_contents:
+                folder_contents[current_folder] = []
+
+            if files:
+                for content in files:
+                    name = content['name'].strip()
+                    url_val = content.get('url') or content.get('thumbnailUrl')
+
+                    if not url_val or url_val in fetched_urls:
                             continue
                             
-                        if "media-cdn.classplusapp.com/tencent/" in url_val:
-                            url_val = url_val.rsplit('/', 1)[0] + "/master.m3u8"
-                        elif "media-cdn.classplusapp.com" in url_val and url_val.endswith('.jpg'):
-                            identifier = url_val.split('/')[-3]
-                            url_val = f'https://media-cdn.classplusapp.com/alisg-cdn-a.classplusapp.com/{identifier}/master.m3u8'
-                        elif "tencdn.classplusapp.com" in url_val and url_val.endswith('.jpg'):
-                            identifier = url_val.split('/')[-2]
-                            url_val = f'https://media-cdn.classplusapp.com/tencent/{identifier}/master.m3u8'
-                        elif "4b06bf8d61c41f8310af9b2624459378203740932b456b07fcf817b737fbae27" in url_val and url_val.endswith('.jpeg'):
-                            video_id = url_val.split('/')[-1].split('.')[0]
-                            url_val = f'https://media-cdn.classplusapp.com/alisg-cdn-a.classplusapp.com/b08bad9ff8d969639b2e43d5769342cc62b510c4345d2f7f153bec53be84fe35/{video_id}/master.m3u8'
-                        elif "cpvideocdn.testbook.com" in url_val and url_val.endswith('.png'):
-                            match = re.search(r'/streams/([a-f0-9]{24})/', url_val)
-                            video_id = match.group(1) if match else url_val.split('/')[-2]
-                            url_val = f'https://cpvod.testbook.com/{video_id}/playlist.m3u8'
-                        elif "media-cdn.classplusapp.com/drm/" in url_val and url_val.endswith('.png'):
-                            video_id = url_val.split('/')[-3]
-                            url_val = f'https://media-cdn.classplusapp.com/drm/{video_id}/playlist.m3u8'
-                        elif "https://media-cdn.classplusapp.com" in url_val and ("cc/" in url_val or "lc/" in url_val or "uc/" in url_val or "dy/" in url_val) and url_val.endswith('.png'):
-                            url_val = url_val.replace('thumbnail.png', 'master.m3u8')
-                        elif "https://tb-video.classplusapp.com" in url_val and url_val.endswith('.jpg'):
-                            video_id = url_val.split('/')[-1].split('.')[0]
-                            url_val = f'https://tb-video.classplusapp.com/{video_id}/master.m3u8'
-
-                        if url_val.endswith(("master.m3u8", "playlist.m3u8")) and url_val not in fetched_urls:
-                            fetched_urls.add(url_val)
-                            headers2 = { 'x-access-token': 'eyJjb3Vyc2VJZCI6IjQ1NjY4NyIsInR1dG9ySWQiOm51bGwsIm9yZ0lkIjo0ODA2MTksImNhdGVnb3J5SWQiOm51bGx9'}
-                            task = asyncio.create_task(process_cpwp_url(url_val, name, session, headers2))
-                            content_tasks.append((content['id'], task))
+                    fetched_urls.add(url_val)
+                    full_name = f"[{current_folder}][{name}]" if current_folder != "Root" else f"[{name}]"
+                    
+                    processed_url = await process_cpwp_url(url_val, full_name, session, headers)
+                    if processed_url:
+                        folder_contents[current_folder].append(processed_url)
+                        if '.m3u8' in processed_url or '.mp4' in processed_url:
                             video_count += 1
+                        elif '.pdf' in processed_url:
+                            pdf_count += 1
                         else:
-                            if url_val:
-                                fetched_urls.add(url_val)
-                                results.append(f"{name}:{url_val}\n")
-                                if url_val.endswith('.pdf'):
-                                    pdf_count += 1
-                                else:
-                                    image_count += 1
-                
-                await asyncio.sleep(1)  # Rate limiting delay
-                            
-    except asyncio.TimeoutError:
-        logging.error(f"Timeout while fetching content list for folder {folder_id}")
-        if retry_count < MAX_RETRIES:
-            wait_time = min(2 ** retry_count, 30)
-            await asyncio.sleep(wait_time)
-            return await get_cpwp_course_content(session, headers, Batch_Token, folder_id, limit, retry_count + 1)
-        return [], 0, 0, 0
+                            image_count += 1
                                 
     except Exception as e:
-        logging.exception(f"An unexpected error occurred: {e}")
+        logging.error(f"Error: {e}")
         if retry_count < MAX_RETRIES:
-            logging.info(f"Retrying folder {folder_id} (Attempt {retry_count + 1}/{MAX_RETRIES})")
             wait_time = min(2 ** retry_count, 30)
             await asyncio.sleep(wait_time)
-            return await get_cpwp_course_content(session, headers, Batch_Token, folder_id, limit, retry_count + 1)
-        else:
-            logging.error(f"Failed to retrieve folder {folder_id} after {MAX_RETRIES} retries.")
-            return [], 0, 0, 0
-            
-    # Process tasks in chunks
-    chunk_size = 10
-    for i in range(0, len(content_tasks), chunk_size):
-        chunk = content_tasks[i:i + chunk_size]
-        try:
-            chunk_results = await asyncio.wait_for(
-                asyncio.gather(*(task for _, task in chunk), return_exceptions=True),
-                timeout=TIMEOUT
-            )
-            
-            for result in chunk_results:
-                if isinstance(result, Exception):
-                    logging.error(f"Task failed with exception: {result}")
-                elif result:
-                    results.append(result)
-            
-            await asyncio.sleep(1)
-            
-        except asyncio.TimeoutError:
-            logging.error(f"Timeout while gathering results chunk {i//chunk_size + 1}")
-            continue
-    
-    # Process folder tasks
-    for i in range(0, len(folder_tasks), chunk_size):
-        chunk = folder_tasks[i:i + chunk_size]
-        try:
-            chunk_results = await asyncio.wait_for(
-                asyncio.gather(*(task for _, task in chunk), return_exceptions=True),
-                timeout=TIMEOUT
-            )
-            
-            for folder_id, result in zip([fid for fid, _ in chunk], chunk_results):
-                if isinstance(result, Exception):
-                    logging.error(f"Folder task failed with exception: {result}")
-                else:
-                    nested_results, nested_video_count, nested_pdf_count, nested_image_count = result
-                    if nested_results:
-                        results.extend(nested_results)
-                    video_count += nested_video_count
-                    pdf_count += nested_pdf_count
-                    image_count += nested_image_count
-            
-            await asyncio.sleep(1)
-            
-        except asyncio.TimeoutError:
-            logging.error(f"Timeout while gathering folder results chunk {i//chunk_size + 1}")
-            continue
+            return await get_cpwp_course_content(session, headers, Batch_Token, folder_id, folder_path, limit, retry_count + 1, m, status_msg)
+        return {}, 0, 0, 0
 
-    return results, video_count, pdf_count, image_count
+    return folder_contents, video_count, pdf_count, image_count
     
 
     
 async def process_cpwp(bot: Client, m: Message, user_id: int):
-    # Add channel ID at the top
     CHANNEL_ID = -1002601604234
     
     headers = {
@@ -295,7 +288,7 @@ async def process_cpwp(bot: Client, m: Message, user_id: int):
         'region': 'IN',
         'user-agent': 'Mobile-Android',
         'webengage-luid': '00000187-6fe4-5d41-a530-26186858be4c',
-        'x-access-token': 'eyJhbGciOiJIUzM4NCIsInR5cCI6IkpXVCJ9.eyJpZCI6MTIyMDc4ODg0LCJvcmdJZCI6NzExNTI4LCJ0eXBlIjoxLCJtb2JpbGUiOiI5MTg2MDAzOTAyODgiLCJuYW1lIjoiU2Fua2V0IFNvbmFyIiwiZW1haWwiOiJoanMuc2Fua2V0QGdtYWlsLmNvbSIsImlzSW50ZXJuYXRpb25hbCI6MCwiZGVmYXVsdExhbmd1YWdlIjoiRU4iLCJjb3VudHJ5Q29kZSI6IklOIiwiY291bnRyeUlTTyI6IjkxIiwidGltZXpvbmUiOiJHTVQrNTozMCIsImlzRGl5Ijp0cnVlLCJvcmdDb2RlIjoidWphbGFmIiwiaXNEaXlTdWJhZG1pbiI6MCwiZmluZ2VycHJpbnRJZCI6IjE3MjAxMDU1NjkwMjYiLCJpYXQiOjE3NDkyNTUzOTUsImV4cCI6MTc0OTg2MDE5NX0.uKdyXfFDtcdyaUItjc_G1ALYwtKxVyuG_SnPhRPa2cNy9Tzd0TaXdXNw1d2cUurv'
+        'x-access-token': 'eyJhbGciOiJIUzM4NCIsInR5cCI6IkpXVCJ9.eyJpZCI6MTU0NzYyMTM2LCJvcmdJZCI6OTU2LCJ0eXBlIjoxLCJtb2JpbGUiOiI5MTc4MTc1MjMwNDEiLCJuYW1lIjoiU0lUQSBERVZJIiwiZW1haWwiOiJlcGhwcXFycEBwdW5rcHJvb2YuY29tIiwiaXNGaXJzdExvZ2luIjp0cnVlLCJkZWZhdWx0TGFuZ3VhZ2UiOiJFTiIsImNvdW50cnlDb2RlIjoiSU4iLCJpc0ludGVybmF0aW9uYWwiOjAsImlzRGl5Ijp0cnVlLCJsb2dpblZpYSI6Ik90cCIsImZpbmdlcnByaW50SWQiOiIxOTdiYjA3YzNjYTJjMmFmZWQxZjg4ZDNkMGJjNGRmOSIsImlhdCI6MTc1MDkxOTQ3OCwiZXhwIjoxNzUxNTI0Mjc4fQ._TxiY6KfCG2Dvl622ONdOobnV9I4cqEL9RVaEvhc-Gt76h7hF7z4pOp0_60puqHM'
     }
 
     loop = asyncio.get_event_loop()
@@ -303,7 +296,6 @@ async def process_cpwp(bot: Client, m: Message, user_id: int):
     async with aiohttp.ClientSession(connector=CONNECTOR, loop=loop) as session:
         editable = None
         try:
-            # Get user info at the start
             user = await bot.get_users(user_id)
             user_name = user.first_name
             if user.last_name:
@@ -316,267 +308,257 @@ async def process_cpwp(bot: Client, m: Message, user_id: int):
                 input1 = await bot.listen(chat_id=m.chat.id, filters=filters.user(user_id), timeout=120)
                 org_code = input1.text.lower()
                 await input1.delete(True)
-            except ListenerTimeout:
-                await editable.edit("**Timeout! You took too long to respond**")
-                return
             except Exception as e:
-                logging.exception("Error during input1 listening:")
-                try:
                     await editable.edit(f"**Error: {e}**")
-                except:
-                    logging.error(f"Failed to send error message to user: {e}")
-                return
+                    return
+        except Exception as e:
+            await editable.edit(f"**Error: {e}**")
+            return
 
-            hash_headers = {
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-                'Accept-Encoding': 'gzip, deflate, br, zstd',
-                'Accept-Language': 'en-US,en;q=0.9',
-                'Referer': 'https://qsvfn.courses.store/?mainCategory=0&subCatList=[130504,62442]',
-                'Sec-CH-UA': '"Chromium";v="128", "Not;A=Brand";v="24", "Google Chrome";v="128"',
-                'Sec-CH-UA-Mobile': '?0',
-                'Sec-CH-UA-Platform': '"Windows"',
-                'Sec-Fetch-Dest': 'document',
-                'Sec-Fetch-Mode': 'navigate',
-                'Sec-Fetch-Site': 'same-origin',
-                'Sec-Fetch-User': '?1',
-                'Upgrade-Insecure-Requests': '1',
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36'
+        hash_headers = {
+                'Accept': '*/*',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0.0.0'
             }
             
-            async with session.get(f"https://{org_code}.courses.store", headers=hash_headers) as response:
-                html_text = await response.text()
-                hash_match = re.search(r'"hash":"(.*?)"', html_text)
+        try:
+                # Get course hash
+                async with session.get(f"https://{org_code}.courses.store", headers=hash_headers) as response:
+                    html_text = await response.text()
+                    hash_match = re.search(r'"hash":"(.*?)"', html_text)
 
-                if hash_match:
+                    if not hash_match:
+                        raise Exception("No courses found! Please check the org code.")
+                    
                     token = hash_match.group(1)
                     all_courses = []
-                    page = 0
-                    page_size = 100  # Increased page size
                     
-                    try:
-                        # First try the new API endpoint
-                        async with session.get(
-                            f"https://api.classplusapp.com/v2/course/search/published?limit={page_size}&offset={page}&sortBy=courseCreationDate&status=published", 
+                # Try new API first
+                async with session.get(
+                    "https://api.classplusapp.com/v2/course/search/published?limit=100&offset=0&sortBy=courseCreationDate&status=published", 
                             headers=headers
                         ) as response:
                             if response.status == 200:
                                 res_json = await response.json()
-                                courses = res_json.get('data', {}).get('courses', [])
-                                if courses:
-                                    all_courses.extend(courses)
+                                all_courses = res_json.get('data', {}).get('courses', [])
                             else:
-                                # If new API fails, try the old endpoint
-                                while True:
+                            # Fallback to old API
+                                page = 0
+                            while True:
                                     async with session.get(
-                                        f"https://api.classplusapp.com/v2/course/preview/similar/{token}?limit={page_size}&page={page}", 
+                                f"https://api.classplusapp.com/v2/course/preview/similar/{token}?limit=100&page={page}", 
                                         headers=headers
                                     ) as response:
-                                        if response.status == 200:
-                                            res_json = await response.json()
-                                            courses = res_json.get('data', {}).get('coursesData', [])
-                                            
-                                            if not courses:  # No more courses to fetch
-                                                break
-                                                
-                                            all_courses.extend(courses)
-                                            page += 1
-                                            
-                                            if len(courses) < page_size:  # Last page
-                                                break
-                                        else:
+                                        if response.status != 200:
                                             break
+                                        
+                                        res_json = await response.json()
+                
+                                    courses = res_json.get('data', {}).get('coursesData', [])
+                                    if not courses:
+                                        break
+                                    
+                                    all_courses.extend(courses)
+                                    if len(courses) < 100:
+                                        break
+                                    page += 1
 
-                        if not all_courses:
-                            raise Exception("No batches found! Please check if the org code is correct.")
+                                    if not all_courses:
+                                        raise Exception("No batches found! Please check if the org code is correct.")
 
                         # Sort courses by name
-                        all_courses.sort(key=lambda x: x.get('name', '').lower())
+                            all_courses.sort(key=lambda x: x.get('name', '').lower())
 
                         # Split courses into chunks of 20 for display
-                        chunks = [all_courses[i:i + 20] for i in range(0, len(all_courses), 20)]
-                        all_indices = []
-                        
-                        initial_msg = await m.reply_text(f"**📚 Found {len(all_courses)} batches\nSending batch list in {len(chunks)} parts...**")
-                        await asyncio.sleep(2)  # Small delay before starting
-                        await initial_msg.delete()
-                        
-                        last_status_msg = None
-                        for chunk_num, chunk in enumerate(chunks, 1):
-                            text = f'📚 **Available Batches (Page {chunk_num}/{len(chunks)})**\n\n'
+                            chunks = [all_courses[i:i + 20] for i in range(0, len(all_courses), 20)]
+                            total_chunks = len(chunks)
+
+                        # Send first chunk with modern header
+                            first_text = (
+                    "📚 Available Batches\n"
+                    f"📑 Page 1/{total_chunks}\n"
+                    "──────────────────\n\n"
+                )
                             
-                            for cnt, course in enumerate(chunk, 1 + (chunk_num-1)*20):
-                                name = course.get('name', 'Untitled')
-                                price = course.get('finalPrice', 'N/A')
-                                text += f"{cnt}. ```\n{name} 💵₹{price}```\n"
-                                all_indices.append(str(cnt))
-                            
-                            if chunk_num == len(chunks):  # Last chunk
-                                copy_paste_format = "&".join(all_indices)
-                                text += f"\n**For Multiple Batches Copy This** 👇\n`{copy_paste_format}`"
-                            
-                            # Send each chunk as a separate message
-                            try:
-                                if chunk_num == 1:  # First chunk
-                                    await editable.edit(f"**Send index number of the Category Name\n\n{text}\n\nIf Your Batch Not Listed Then Enter Your Batch Name\n\nFor multiple batches, enter indices separated by & (e.g. 1&2&3)**")
-                                else:
-                                    await m.reply_text(text)
-                                
-                                # Add 5-second delay between chunks, except for the last one
-                                if chunk_num < len(chunks):
-                                    # Delete previous status message if it exists
-                                    if last_status_msg:
-                                        try:
-                                            await last_status_msg.delete()
-                                        except:
-                                            pass
-                                    last_status_msg = await m.reply_text(f"**📤 Sent {chunk_num}/{len(chunks)} parts...\nPlease wait 5 seconds...**")
-                                    await asyncio.sleep(5)
-                            except Exception as e:
-                                print(f"Error in chunk {chunk_num}: {str(e)}")
-                                continue
-                        
-                        # Delete the final status message
-                        if last_status_msg:
-                            try:
-                                await last_status_msg.delete()
-                            except:
-                                pass
+                for cnt, course in enumerate(chunks[0], 1):
+                    first_text += await format_batch_info(course, cnt)
 
-                        # Get batch selection from user
-                        try:
-                            batch_input = await bot.listen(chat_id=m.chat.id, filters=filters.user(user_id), timeout=300)
-                            raw_text2 = batch_input.text
-                            await batch_input.delete(True)
-                        except ListenerTimeout:
-                            await editable.edit("**Timeout! You took too long to respond**")
-                            return
-                        except Exception as e:
-                            logging.exception("Error during batch selection:")
-                            await editable.edit(f"**Error: {e}**")
-                            return
+                first_text += (
+                    "──────────────────\n"
+                    "Send up to 5 batch numbers\n"
+                    "Example: 1, 3, 5, 11, 14"
+                )
+                await editable.edit(first_text)
 
-                    except Exception as e:
-                        error_msg = f"**Error : {e}**"
-                        if editable:
-                            try:
-                                await editable.edit(error_msg)
-                            except:
-                                await m.reply_text(error_msg)
-                        else:
-                            await m.reply_text(error_msg)
-                        return
+                # Send remaining chunks with clean format
+                for chunk_num, chunk in enumerate(chunks[1:], 2):
+                    chunk_text = (
+                        "📚 Available Batches\n"
+                        f"📑 Page {chunk_num}/{total_chunks}\n"
+                        "──────────────────\n\n"
+                    )
+                    
+                    start_idx = (chunk_num - 1) * 20
+                    for cnt, course in enumerate(chunk, start_idx + 1):
+                        chunk_text += await format_batch_info(course, cnt)
+                    
+                    await m.reply_text(chunk_text)
+                    await asyncio.sleep(0.5)
 
-                else:
-                    raise Exception("Didn't Find Any Course")
+        except Exception as e:
+                await editable.edit(f"**Error: {e}**")
+                return
 
-            # Handle multiple batch indices
-            batch_indices = raw_text2.split('&')
-            total_batches = len(batch_indices)
-            processed_batches = 0
-            last_wait_msg = None
+            # Split by comma and limit to 5 batches
+        batch_input = await bot.listen(chat_id=m.chat.id, filters=filters.user(user_id), timeout=300)
+        raw_text2 = batch_input.text
+        await batch_input.delete(True)
+
+        batch_indices = [idx.strip() for idx in raw_text2.split(',')][:5]
+        if len(batch_indices) > 5:
+                await m.reply_text("**⚠️ Only first 5 batches will be processed**")
+                return
             
-            # Show initial status
-            initial_extract_msg = await m.reply_text(f"**📥 Starting extraction of {total_batches} batches\nPlease wait, this may take some time...**")
-            await asyncio.sleep(2)
-            await initial_extract_msg.delete()
+        total_batches = len(batch_indices)
+        processed_batches = 0
             
-            # Process each batch separately
-            for batch_index in batch_indices:
+        for batch_index in batch_indices:
                 batch_index = batch_index.strip()
                 start_time = time.time()
-                thumb_path = None
-                
-                # Add delay between batches except for the first one
-                if processed_batches > 0:
-                    # Delete previous wait message if it exists
-                    if last_wait_msg:
-                        try:
-                            await last_wait_msg.delete()
-                        except:
-                            pass
-                    last_wait_msg = await m.reply_text(f"**⏳ Waiting 5 seconds before next batch...\n📊 Progress: {processed_batches}/{total_batches} batches done**")
-                    await asyncio.sleep(5)
-                    await last_wait_msg.delete()
-                
-                # Download thumbnail for this batch
-                if config.THUMB_URL:
-                    thumb_path = await download_thumbnail(session, config.THUMB_URL)
                 
                 if batch_index.isdigit() and int(batch_index) <= len(all_courses):
-                    selected_course_index = int(batch_index)
-                    course = all_courses[selected_course_index - 1]
-                    selected_batch_id = course['id']
-                    selected_batch_name = course['name']
-                    clean_batch_name = selected_batch_name.replace("/", "-").replace("|", "-")
-                    
-                    status_msg = await m.reply_text(
-                        f"**📥 Extracting Batch {processed_batches + 1}/{total_batches}**\n"
-                        f"**Name:** `{selected_batch_name}`"
-                    )
-
-                    batch_headers = {
-                        'Accept': 'application/json, text/plain, */*',
+                    try:
+                        batch_headers = {
+                            'Accept': '*/*',
                         'region': 'IN',
                         'accept-language': 'EN',
                         'Api-Version': '22',
-                        'tutorWebsiteDomain': f'https://{org_code}.courses.store'
-                    }
+                            'tutorWebsiteDomain': f'https://{org_code}.courses.store',
+                            'x-access-token': headers.get('x-access-token'),
+                            'accept-encoding': 'gzip',
+                            'connection': 'Keep-Alive',
+                            'user-agent': 'Mobile-Android'
+                        }
                         
-                    params = {
-                        'courseId': f'{selected_batch_id}',
-                    }
-
-                    try:
-                        async with session.get(f"https://api.classplusapp.com/v2/course/preview/org/info", params=params, headers=batch_headers) as response:
-                            if response.status == 200:
-                                res_json = await response.json()
-                                Batch_Token = res_json['data']['hash']
-                                App_Name = res_json['data']['name']
-
-                                course_content, video_count, pdf_count, image_count = await get_cpwp_course_content(session, headers, Batch_Token)
+                        try:
+                            selected_course_index = int(batch_index)
+                            course = all_courses[selected_course_index - 1]
+                            selected_batch_id = course['id']
+                            clean_batch_name = course['name'].replace('/', '-').replace('|', '-')
+                            batch_thumbnail = course.get('imageUrl', '')
+                            
+                            # Get course preview info
+                            preview_url = f"https://api.classplusapp.com/v2/course/preview/org/info"
+                            params = {'courseId': selected_batch_id}
+                            
+                            async with session.get(preview_url, params=params, headers=batch_headers) as response:
+                                response_text = await response.text()
+                                print(f"\nAPI Response Text: {response_text}")
                                 
-                                if course_content:
-                                    # Create individual file for this batch
-                                    batch_filename = f"{clean_batch_name}_{batch_index}.txt"
-                                    original_filename = f"{clean_batch_name}_{batch_index}_original.txt"
+                                if response.status != 200:
+                                    print(f"\n⚠️ Failed to get preview details. Status: {response.status}")
+                                    await m.reply_text("⚠️ Failed to get batch preview details")
+                                    continue
                                     
-                                    # Save original content for logs
-                                    with open(original_filename, 'w', encoding='utf-8') as f:
-                                        f.write(''.join(course_content))
+                                preview_details = json.loads(response_text)
+                                print("\nCOURSE PREVIEW API RESPONSE:")
+                                print("="*50)
+                                print(json.dumps(preview_details, indent=4))
+                                print("="*50 + "\n")
+                                
+                                # Get Batch Token from preview response
+                                Batch_Token = preview_details.get('data', {}).get('hash')
+                                App_Name = preview_details.get('data', {}).get('name')
+                                
+                                if not Batch_Token:
+                                    await m.reply_text("⚠️ Failed to get batch token")
+                                    continue
+                        except Exception as e:
+                            await m.reply_text(f"**Error: {e}**")
+                            return
 
-                                    # Create unencrypted content for user
-                                    content = ''.join(course_content)
-                                    # encrypted_content = await process_file_content(content, encrypt=True)  # Encryption skipped as per user request
-                                    
-                                    # Save unencrypted content for user
-                                    with open(batch_filename, 'w', encoding='utf-8') as f:
-                                        f.write(content)
+                        try:
+                            status_msg = await m.reply_text(
+                                f"📥 ᴇxᴛʀᴀᴄᴛɪɢ: {clean_batch_name}"
+                            )
 
-                                    end_time = time.time()
-                                    response_time = end_time - start_time
-                                    minutes = int(response_time // 60)
-                                    seconds = int(response_time % 60)
+                            course_content, video_count, pdf_count, image_count = await get_cpwp_course_content(
+                                session, headers, Batch_Token, m=m, status_msg=status_msg
+                            )
 
-                                    if minutes == 0:
-                                        if seconds < 1:
-                                            formatted_time = f"{response_time:.2f} seconds"
+                            if course_content:
+                                batch_filename = f"{clean_batch_name}_{batch_index}.txt"
+                                zip_filename = f"{clean_batch_name}_{batch_index}_folders.zip"
+
+                                # Try to get thumbnail
+                                thumb_path = None
+                                if batch_thumbnail:
+                                    thumb_path = await download_thumbnail(session, batch_thumbnail)
+                                elif config.THUMB_URL:
+                                    thumb_path = await download_thumbnail(session, config.THUMB_URL)
+
+                                # Create organized content for txt file
+                                organized_content = [
+                                    f"{clean_batch_name} : {batch_thumbnail}\n\n"
+                                ]
+                                
+                                # Create zip file with proper folder structure
+                                with zipfile.ZipFile(zip_filename, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                                    # Add content organized by folders
+                                    for folder_name, contents in sorted(course_content.items()):
+                                        if contents:
+                                            if folder_name != "Root":
+                                                organized_content.append(f"[{folder_name}]\n")
+                                                folder_path = folder_name.replace('/', '-').replace('\\', '-')
                                         else:
-                                            formatted_time = f"{seconds} seconds"
-                                    else:
-                                        formatted_time = f"{minutes} minutes {seconds} seconds"
-
-                                    caption = (f"࿇ ══━━{mention}━━══ ࿇\n\n"
-                                             f"🌀 **Aᴘᴘ Nᴀᴍᴇ** : {App_Name}\n"
-                                             f"🔑 **Oʀɢ Cᴏᴅᴇ** : `{org_code}`\n"
-                                             f"============================\n\n"
-                                             f"🎯 **Bᴀᴛᴄʜ Nᴀᴍᴇ** : `{clean_batch_name}`\n"
-                                             f"<blockquote>🎬 : {video_count} | 📁 : {pdf_count} | 🖼 : {image_count}</blockquote>\n\n"
-                                           f"🌐 **Jᴏɪɴ Us** : {join}\n"
-                                             f"⌛ **Tɪᴍᴇ Tᴀᴋᴇɴ** : {formatted_time}</blockquote>\n\n"
-                                             f"❄️ **Dᴀᴛᴇ** : {time_new}")
+                                                folder_path = "Main"
+                                                
+                                            # Create folder content
+                                        folder_content = []
+                                        for content in sorted(contents):
+                                                if content:  # Skip empty content
+                                                    organized_content.append(content)
+                                                    # Extract name and URL
+                                                    parts = content.split(" : ", 1)
+                                                    if len(parts) == 2:
+                                                        name = parts[0].strip('[]')
+                                                        url = parts[1].strip()
+                                                        folder_content.append(f"{name}\n{url}\n\n")
+                                                        
+                                            # Add to zip with folder structure
+                                        if folder_content:
+                                                zip_path = f"{folder_path}/content.txt"
+                                                zipf.writestr(zip_path, ''.join(folder_content))
                                             
-                                    try:
-                                        # Send unencrypted file to user
+                                        organized_content.append("\n")  # Add space between folders
+                                
+                                # Add owner info at the end
+                                organized_content.append("Owner: https://t.me/ItsUGBot")
+
+                                # Save txt file
+                                with open(batch_filename, 'w', encoding='utf-8') as f:
+                                    f.write(''.join(organized_content))
+
+                                # Create caption
+                                caption = (
+                                    f"🎯 <b>{App_Name.upper()}</b>\n\n"
+                                    f"🔑 ᴄᴏᴅᴇ: `{org_code}`\n"
+                                    f"<blockquote>📝 ʙᴀᴛᴄʜ: {clean_batch_name}</blockquote>\n\n"
+                                    f"💰 ᴘʀɪᴄᴇ: ₹{course.get('finalPrice', 'N/A')}\n"
+                                    f"📅 ꜱᴛᴀʀᴛ: {course.get('createdAt', 'N/A').split('T')[0] if course.get('createdAt') else 'N/A'}\n"
+                                    f"📅 ᴇɴᴅ: {course.get('expiresAt', 'N/A')}\n"
+                                    f"<blockquote>📊 ᴄᴏɴᴛᴇɴᴛ ᴅᴇᴛᴀɪʟꜱ:\n"
+                                    f"├─⭓ 🎬 ᴠɪᴅᴇᴏꜱ: {video_count}\n"
+                                    f"├─⭓ 📑 ᴘᴅꜰꜱ: {pdf_count}\n"
+                                    f"└─⭓ 🖼 ɪᴍᴀɢᴇꜱ: {image_count}</blockquote>\n\n"
+                                    f"🤖 ᴜꜱɪɴɢ: {join}\n"
+                                    f"⏱ ᴛɪᴍᴇ ᴛᴀᴋᴇɴ: {format_time_taken(start_time)}\n"
+                                    f"📅 ᴅᴀᴛᴇ: {time_new}\n\n"
+                                    f"<blockquote><b>👑 EXTRACTED BY:</b> {mention}</blockquote>"
+                                )
+
+                                # Send files
+                                try:
+                                    # Send txt file
                                         with open(batch_filename, 'rb') as f:
                                             await m.reply_document(
                                                 document=f, 
@@ -585,60 +567,56 @@ async def process_cpwp(bot: Client, m: Message, user_id: int):
                                                 file_name=f"{clean_batch_name}_{batch_index}.txt"
                                             )
                                             
-                                        # Add summary message that stays for 5 seconds
-                                        summary_msg = await m.reply_text(
-                                            f"**📊 Content Summary for {clean_batch_name}**\n\n"
-                                            f"🎬 **Total Videos/Images**: {video_count}\n"
-                                            f"📁 **Total PDFs**: {pdf_count}\n\n"
-                                            f"⌛ This message will disappear in 5 seconds..."
-                                        )
-                                        await asyncio.sleep(5)
-                                        await summary_msg.delete()
-                                        
-                                        # Send original file to logs
-                                        with open(original_filename, 'rb') as f:
-                                            await app.send_document(
-                                                chat_id=PREMIUM_LOGS,
-                                                document=f,
-                                                caption=f"🔓 **Original Decrypted Version**\n\n{caption}",
-                                                thumb=thumb_path,
-                                                file_name=f"{clean_batch_name}_{batch_index}_original.txt"
+                                        # Send zip file
+                                        with open(zip_filename, 'rb') as f:
+                                            await m.reply_document(
+                                            document=f,
+                                            caption=f"<blockquote>📁 Folder-wise content for {clean_batch_name}</blockquote>",
+                                            thumb=thumb_path,
+                                            file_name=f"{clean_batch_name}_{batch_index}_folders.zip"
                                             )
-                                    except Exception as e:
-                                        print(f"Error sending document: {e}")
-                                        await m.reply_text(f"**Error sending file for batch {selected_batch_name}: {str(e)}**")
-                                    finally:
+                                except Exception as e:
+                                    await m.reply_text(f"**Error sending files: {str(e)}**")
+                                finally:
+                                        
                                         try:
                                             os.remove(batch_filename)
-                                            os.remove(original_filename)
+                                            os.remove(zip_filename)
                                             if thumb_path and os.path.exists(thumb_path):
                                                 os.remove(thumb_path)
+                                            if status_msg:
+                                                await status_msg.delete()
                                         except:
                                             pass
-                                else:
-                                    await m.reply_text(f"**No content found in batch: {selected_batch_name}**")
                             else:
-                                await m.reply_text(f"**Error fetching batch {selected_batch_name}: {response.text}**")
+                                await m.reply_text(f"**No content found in batch: {clean_batch_name}**")
+                    
+                        except Exception as e:
+                            await m.reply_text(f"**Error processing batch: {str(e)}**")
+                        finally:
+                            processed_batches += 1
                     except Exception as e:
-                            await m.reply_text(f"**Error processing batch {selected_batch_name}: {str(e)}**")
+                        await m.reply_text(f"**Error processing batch: {str(e)}**")
                     finally:
                             processed_batches += 1
-                            try:
-                                await status_msg.delete()
-                            except:
-                                pass
                 else:
                     await m.reply_text(f"**Invalid batch index: {batch_index}**")
 
-            await m.reply_text(f"**✅ Completed processing {processed_batches}/{total_batches} batches**")
+        await m.reply_text(f"<blockquote>✅ Completed {processed_batches}/{total_batches} batches</blockquote>")
             
+        try:
+            await editable.delete()
+        except:
+            pass
+            
+        try:
+            await editable.edit(error_msg)
             if editable:
                 try:
                     await editable.delete()
                 except:
                     pass
-        except Exception as e:
-            error_msg = f"**Error : {e}**"
+                    
             if editable:
                 try:
                     await editable.edit(error_msg)
@@ -650,3 +628,33 @@ async def process_cpwp(bot: Client, m: Message, user_id: int):
         finally:
             await session.close()
             await CONNECTOR.close()
+
+async def get_thumbnail_url(url: str) -> str | None:
+    """Extract thumbnail URL from video URL"""
+    try:
+        if url.endswith('.m3u8'):
+            return url.replace('master.m3u8', 'thumbnail.jpg')
+        elif url.endswith('.mp4'):
+            return url.replace('.mp4', '.jpg')
+        return None
+    except Exception as e:
+        logging.error(f"Error getting thumbnail URL: {e}")
+        return None
+
+async def format_batch_info(course: Dict[str, Any], index: int) -> str:
+    """Format batch information for display"""
+    try:
+        name = course.get('name', 'Untitled').strip()
+        price = course.get('finalPrice', 'N/A')
+        created_at = course.get('createdAt', 'N/A')
+        if created_at and 'T' in created_at:
+            created_at = created_at.split('T')[0]
+        
+        return (
+            f"{index}. {name}\n"
+            f"   💰 Price: ₹{price}\n"
+            f"   📅 Created: {created_at}\n\n"
+        )
+    except Exception as e:
+        logging.error(f"Error formatting batch info: {e}")
+        return f"{index}. Error formatting batch info\n\n"
