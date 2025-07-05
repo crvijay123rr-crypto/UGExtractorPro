@@ -16,6 +16,17 @@ from config import PREMIUM_LOGS, join,BOT_TEXT
 from datetime import datetime
 import pytz
 from Extractor.core.utils import forward_to_log
+import zipfile
+from pathlib import Path
+from aiohttp import ClientTimeout
+from asyncio import Semaphore
+import backoff
+import logging
+from typing import List, Dict, Tuple, Any
+from concurrent.futures import ThreadPoolExecutor
+import subprocess
+import gc
+from datetime import datetime, timedelta
 
 india_timezone = pytz.timezone('Asia/Kolkata')
 current_time = datetime.now(india_timezone)
@@ -24,6 +35,37 @@ time_new = current_time.strftime("%d-%m-%Y %I:%M %p")
 
 apiurl = "https://api.classplusapp.com"
 s = cloudscraper.create_scraper() 
+
+# Add these at the top level of the file
+REQUEST_SEMAPHORE = Semaphore(5)  # Increased from 3 to 5 concurrent requests
+TIMEOUT = ClientTimeout(total=15)  # Reduced timeout to 15 seconds
+
+# Format time taken
+def format_time_taken(start_time: float) -> str:
+    end_time = time.time()
+    time_taken = end_time - start_time
+    formatted_time = str(timedelta(seconds=int(time_taken)))
+    return formatted_time
+
+# Reduce max workers to prevent memory overload
+THREADPOOL = ThreadPoolExecutor(max_workers=2000)
+CHUNK_SIZE = 8192
+
+thumb = os.path.join(os.path.dirname(__file__), "logo.jpg")
+
+@backoff.on_exception(backoff.expo, 
+                     (aiohttp.ClientError, asyncio.TimeoutError),
+                     max_tries=3,
+                     max_time=30)
+async def make_api_request(session, url, headers):
+    """Make API request with retry logic and rate limiting"""
+    async with REQUEST_SEMAPHORE:
+        try:
+            async with session.get(url, headers=headers, timeout=TIMEOUT) as resp:
+                return await resp.json()
+        except Exception as e:
+            print(f"Error making request to {url}: {str(e)}")
+            raise
 
 @app.on_message(filters.command(["cp"]))
 async def classplus_txt(app, message):
@@ -373,8 +415,208 @@ async def fetch_batches(app, message, org_name):
         )
 
 
+async def process_course_contents(course_id, headers, folder_id=0, folder_path="", zip_folder_path="", is_subfolder=False):
+    """Fetch and process course content recursively."""
+    result = []
+    zip_files = []
+    
+    url = f'{apiurl}/v2/course/content/get?courseId={course_id}&folderId={folder_id}'
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            course_data = await make_api_request(session, url, headers)
+            if not course_data.get("data", {}).get("courseContent"):
+                return result, zip_files
+            course_data = course_data["data"]["courseContent"]
+        
+        # Process current folder contents
+        contents = [item for item in course_data if str(item['contentType']) in ("2", "3")]
+        folders = [item for item in course_data if str(item['contentType']) == "1"]
+        
+        if folder_path and (contents or folders):
+            formatted_name = f"[{{ {folder_path} }}]" if is_subfolder else f"[[ {folder_path} ]]"
+            result.append(f"\n{formatted_name}\n")
+            
+            if contents:
+                content_dict = {}
+                for item in contents:
+                    content_type = str(item['contentType'])
+                    sub_name = item['name']
+                    url = item.get("url", "")
+                    if url:
+                        base_name = sub_name.rsplit('.', 1)[0] if '.' in sub_name else sub_name
+                        if base_name not in content_dict:
+                            content_dict[base_name] = []
+                        content_dict[base_name].append((sub_name, url, content_type))
+                
+                for base_name, items in content_dict.items():
+                    for sub_name, url, _ in items:
+                        result.append(f"{sub_name}: {url}\n")
+                        if zip_folder_path:
+                            zip_files.append((zip_folder_path, sub_name, url))
+                result.append("\n")
+
+        # Process subfolders in parallel with chunking
+        chunk_size = 3  # Process 3 folders at a time
+        for i in range(0, len(folders), chunk_size):
+            chunk = folders[i:i + chunk_size]
+            tasks = []
+            for folder in chunk:
+                sub_id = folder['id']
+                sub_name = folder['name']
+                new_folder_path = f"{sub_name}"
+                new_zip_path = os.path.join(zip_folder_path, sub_name) if zip_folder_path else sub_name
+                tasks.append(process_course_contents(
+                    course_id, headers, sub_id, new_folder_path, new_zip_path, is_subfolder=True
+                ))
+            
+            try:
+                chunk_results = await asyncio.gather(*tasks)
+                for sub_content, sub_zip_files in chunk_results:
+                    if sub_content:
+                        result.extend(sub_content)
+                        zip_files.extend(sub_zip_files)
+            except Exception as e:
+                print(f"Error processing folder chunk: {str(e)}")
+                continue
+            
+            if i + chunk_size < len(folders):
+                await asyncio.sleep(0.1)  # Small delay between chunks
+
+    except Exception as e:
+        print(f"Error processing folder {folder_path}: {str(e)}")
+        return result, zip_files
+
+    return result, zip_files
+
+async def fetch_live_videos(course_id, headers, zip_folder_path=""):
+    """Fetch live videos from the API."""
+    outputs = []
+    zip_files = []
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            url = f"{apiurl}/v2/course/live/list/videos?type=2&entityId={course_id}&limit=9999&offset=0"
+            j = await make_api_request(session, url, headers)
+            
+            if "data" in j and "list" in j["data"] and j["data"]["list"]:
+                outputs.append("\n[[ LIVE CLASSES ]]\n")
+                live_folder = "Live Classes"
+                for video in j["data"]["list"]:
+                    name = video.get("name", "Unknown Video")
+                    video_url = video.get("url", "")
+                    if video_url:
+                        outputs.append(f"{name}: {video_url}\n")
+                        if zip_folder_path:
+                            zip_files.append((os.path.join(zip_folder_path, live_folder), name, video_url))
+                outputs.append("\n")
+    except Exception as e:
+        print(f"Error fetching live videos: {str(e)}")
+
+    return outputs, zip_files
+
+async def create_zip_structure(zip_files, base_path):
+    """Create ZIP file with folder structure and URL files."""
+    zip_path = f"{base_path}.zip"
+    
+    # Track used filenames to avoid duplicates
+    used_filenames = set()
+    
+    with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+        processed_folders = set()
+        
+        # First create all folder structure
+        for folder_path, _, _ in zip_files:
+            if folder_path not in processed_folders:
+                folder_info = zipfile.ZipInfo(f"{folder_path}/")
+                zf.writestr(folder_info, "")
+                processed_folders.add(folder_path)
+        
+        # Then create URL files in each folder
+        for folder_path, filename, url in zip_files:
+            # Create base file path
+            base_file_path = os.path.join(folder_path, f"{filename}.txt")
+            
+            # If filename already exists, add a counter
+            if base_file_path in used_filenames:
+                counter = 1
+                while True:
+                    new_file_path = os.path.join(folder_path, f"{filename}_{counter}.txt")
+                    if new_file_path not in used_filenames:
+                        file_path = new_file_path
+                        break
+                    counter += 1
+            else:
+                file_path = base_file_path
+            
+            used_filenames.add(file_path)
+            zf.writestr(file_path, url)
+            
+    return zip_path
+
+async def write_to_file(extracted_data, batch_name):
+    """Write data to a text file asynchronously."""
+    invalid_chars = '\t:/+#|@*.'
+    clean_name = ''.join(char for char in batch_name if char not in invalid_chars)
+    clean_name = clean_name.replace('_', ' ')
+    file_path = f"{clean_name}.txt"
+    
+    # Add header
+    header = f"COURSE: {batch_name}\n\n"
+    
+    with open(file_path, "w", encoding='utf-8') as file:
+        file.write(header)
+        file.write(''.join(extracted_data))
+    return file_path, clean_name
+
+async def download_thumbnail(session: aiohttp.ClientSession, url: str) -> str | None:
+    try:
+        thumb_path = f"thumb_{int(time.time())}.jpg"
+        
+        async with session.get(url, timeout=30) as response:
+            if response.status == 200:
+                with open(thumb_path, "wb") as f:
+                    while True:
+                        chunk = await response.content.read(CHUNK_SIZE)
+                        if not chunk:
+                            break
+                        f.write(chunk)
+                return thumb_path
+            else:
+                logging.warning(f"Thumbnail download failed. Status: {response.status}")
+                return None
+    except Exception as e:
+        logging.error(f"Error downloading thumbnail: {e}")
+        return None
+    finally:
+        gc.collect()
+
+async def get_course_details(session: aiohttp.ClientSession, course_id: str, headers: Dict[str, str]) -> Dict:
+    """Get course details with fallback"""
+    try:
+        # First try v2 API
+        url = f"{apiurl}/v2/course/details/{course_id}"
+        async with session.get(url, headers=headers) as response:
+            if response.status == 200 and response.content_type == 'application/json':
+                data = await response.json()
+                return data.get('data', {})
+
+        # Fallback to v1 API
+        url = f"{apiurl}/course/content/get/{course_id}"
+        async with session.get(url, headers=headers) as response:
+            if response.status == 200 and response.content_type == 'application/json':
+                data = await response.json()
+                return data.get('data', {})
+
+        # If both fail, return empty dict
+        return {}
+    except Exception as e:
+        logging.error(f"Error getting course details: {e}")
+        return {}
+
 async def extract_batch(app, message, org_name, batch_id):
     session_data = s.session_data
+    start_time = time.time()
     
     if "token" in session_data:
         batch_name = session_data["courses"][batch_id]
@@ -386,100 +628,145 @@ async def extract_batch(app, message, org_name, batch_id):
             'device-id': '39F093FF35F201D9'
         }
 
-# inside your extract_batch function, only replacing process_course_contents
+        # Get course details
+        async with aiohttp.ClientSession() as session:
+            # Get batch details first
+            batch_url = f"{apiurl}/v2/course/details/{batch_id}"
+            try:
+                async with session.get(batch_url, headers=headers) as response:
+                    if response.status == 200:
+                        batch_data = await response.json()
+                        print(f"Batch Details: {json.dumps(batch_data, indent=2)}")  # Print batch details
+                        course = batch_data.get('data', {})
+                    else:
+                        course = {}
+            except Exception as e:
+                print(f"Error getting batch details: {e}")
+                course = {}
+            
+            # Try to get thumbnail
+            thumbnail_url = course.get('thumbnailUrl') or course.get('imageUrl')
+            custom_thumb = None
+            if thumbnail_url:
+                custom_thumb = await download_thumbnail(session, thumbnail_url)
 
-        async def process_course_contents(course_id, folder_id=0, folder_path=""):
-            """Fetch and process course content recursively."""
-            result = []
-            url = f'{apiurl}/v2/course/content/get?courseId={course_id}&folderId={folder_id}'
+            # Extract content and create both TXT and ZIP files
+            (extracted_data, zip_files), (live_videos, live_zip_files) = await asyncio.gather(
+                process_course_contents(batch_id, headers, zip_folder_path=batch_name),
+                fetch_live_videos(batch_id, headers, zip_folder_path=batch_name)
+            )
 
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, headers=headers) as resp:
-                    course_data = await resp.json()
-                    course_data = course_data["data"]["courseContent"]
-                    
-            tasks = []
-            for item in course_data:
-                content_type = str(item['contentType'])
-                sub_id = item['id']
-                sub_name = item['name']
+            # Combine all content
+            extracted_data.extend(live_videos)
+            all_zip_files = zip_files + live_zip_files
 
-                if content_type in ("2", "3"):  # Video or PDF
-                    url = item["url"]
-                    full_name = f"{folder_path}{sub_name}: {url}\n"
-                    result.append(full_name)
-                elif content_type == "1":  # Folder
-                 new_folder_path = f"{folder_path}{sub_name} - "
-                 tasks.append(process_course_contents(course_id, sub_id, new_folder_path))
+            # Create text file
+            file_path, clean_name = await write_to_file(extracted_data, batch_name)
+            
+            # Create ZIP file with folder structure
+            zip_path = await create_zip_structure(all_zip_files, clean_name)
 
-            sub_contents = await asyncio.gather(*tasks)
-            for sub_content in sub_contents:
-                result.extend(sub_content)
+            # Count different types of content
+            drm_count = sum(1 for _, _, url in all_zip_files if url and "playlist.m3u8" in url)
+            non_drm_count = sum(1 for _, _, url in all_zip_files if url and ".m3u8" in url and "playlist.m3u8" not in url)
+            pdf_count = sum(1 for _, _, url in all_zip_files if url and url.lower().endswith('.pdf'))
+            image_count = sum(1 for _, _, url in all_zip_files if url and any(url.lower().endswith(ext) for ext in ['.jpg', '.jpeg', '.png', '.gif']))
+            total_videos = drm_count + non_drm_count
 
-            return result
+            # Get org code from org_name
+            org_code = org_name.upper() if org_name else "N/A"
+            
+            # Clean batch name for display
+            clean_batch_name = batch_name.replace("_", " ")
+            
+            # Get user mention
+            mention = f'<a href="tg://user?id={message.from_user.id}">{message.from_user.first_name}</a>'
 
-        async def fetch_live_videos(course_id):
-            """Fetch live videos from the API."""
-            outputs = []
-            async with aiohttp.ClientSession() as session:
+            # Get price and other details
+            price = course.get('finalPrice', course.get('price', 'N/A'))
+            if isinstance(price, (int, float)):
+                price = f"₹{price:,}"
+            
+            created_at = course.get('createdAt', '').split('T')[0] if course.get('createdAt') else 'N/A'
+            expires_at = course.get('expiresAt', 'N/A')
+            instructor = course.get('instructorName', 'N/A')
+            total_lectures = course.get('totalLectures', 'N/A')
+            
+            # Fix duration calculation
+            total_duration = course.get('totalDuration')
+            duration_str = 'N/A'
+            if total_duration:
                 try:
-                    url = f"{apiurl}/v2/course/live/list/videos?type=2&entityId={course_id}&limit=9999&offset=0"
-                    async with session.get(url, headers=headers) as response:
-                        j = await response.json()
-                        if "data" in j and "list" in j["data"]:
-                            for video in j["data"]["list"]:
-                                name = video.get("name", "Unknown Video")
-                                video_url = video.get("url", "")
-                                if video_url:
-                                    outputs.append(f"{name}: {video_url}\n")
-                except Exception as e:
-                    print(f"Error fetching live videos: {e}")
+                    # Convert to int if it's a string
+                    total_duration = int(total_duration)
+                    hours = total_duration // 3600
+                    minutes = (total_duration % 3600) // 60
+                    duration_str = f"{hours}h {minutes}m"
+                except (ValueError, TypeError):
+                    duration_str = str(total_duration)
 
-            return outputs
+            # Create captions for both TXT and ZIP files
+            txt_caption = (
+                f"🎯 <b>{org_name.upper()}</b>\n\n"
+                f"🔑 ᴄᴏᴅᴇ: `{org_code}`\n"
+                f"<blockquote>📝 ʙᴀᴛᴄʜ: {clean_batch_name}</blockquote>\n\n"
+                f"💰 ᴘʀɪᴄᴇ: {price}\n"
+                f"👨‍🏫 ɪɴsᴛʀᴜᴄᴛᴏʀ: {instructor}\n"
+                f"📅 sᴛᴀʀᴛ: {created_at}\n"
+                f"📅 ᴇxᴘɪʀʏ: {expires_at}\n"
+                f"📊 ʟᴇᴄᴛᴜʀᴇs: {total_lectures}\n"
+                f"⏱ ᴅᴜʀᴀᴛɪᴏɴ: {duration_str}\n\n"
+                f"<blockquote>📊 ᴄᴏɴᴛᴇɴᴛ ᴅᴇᴛᴀɪʟs:\n"
+                f"├─⭓ 🔐 ᴅʀᴍ: {drm_count}\n"
+                f"├─⭓ 🎥 ɴᴏɴ-ᴅʀᴍ: {non_drm_count}\n"
+                f"├─⭓ 📑 ᴘᴅꜰs: {pdf_count}\n"
+                f"└─⭓ 🖼 ɪᴍᴀɢᴇs: {image_count}</blockquote>\n\n"
+                f"🤖 ᴜsɪɴɢ: {join}\n"
+                f"⏱ ᴛɪᴍᴇ ᴛᴀᴋᴇɴ: {format_time_taken(start_time)}\n"
+                f"📅 ᴅᴀᴛᴇ: {time_new}\n\n"
+                f"<blockquote><b>👑 EXTRACTED BY:</b> {mention}</blockquote>"
+            )
 
-        async def write_to_file(extracted_data):
-            """Write data to a text file asynchronously."""
-            invalid_chars = '\t:/+#|@*.'
-            clean_name = ''.join(char for char in batch_name if char not in invalid_chars)
-            clean_name = clean_name.replace('_', ' ')
-            file_path = f"{clean_name}.txt"
+            zip_caption = (
+                f"🎯 <b>{org_name.upper()}</b>\n\n"
+                f"🔑 ᴄᴏᴅᴇ: `{org_code}`\n"
+                f"<blockquote>📝 ʙᴀᴛᴄʜ: {clean_batch_name}</blockquote>\n\n"
+                f"<blockquote>📦 ᴢɪᴘ ᴄᴏɴᴛᴇɴᴛs:\n"
+                f"├─⭓ 📂 ᴛᴏᴛᴀʟ ꜰᴏʟᴅᴇʀs: {len(set(f[0] for f in all_zip_files))}\n"
+                f"├─⭓ 📹 ᴛᴏᴛᴀʟ ᴠɪᴅᴇᴏs: {total_videos}\n"
+                f"├─⭓ 📑 ᴛᴏᴛᴀʟ ᴘᴅꜰs: {pdf_count}\n"
+                f"└─⭓ 🖼 ᴛᴏᴛᴀʟ ɪᴍᴀɢᴇs: {image_count}</blockquote>\n\n"
+                f"🤖 ᴜsɪɴɢ: {join}\n"
+                f"⏱ ᴛɪᴍᴇ ᴛᴀᴋᴇɴ: {format_time_taken(start_time)}\n"
+                f"📅 ᴅᴀᴛᴇ: {time_new}\n\n"
+                f"<blockquote><b>👑 EXTRACTED BY:</b> {mention}</blockquote>"
+            )
+
+            # Send both files
+            await app.send_document(
+                message.chat.id, 
+                file_path,
+                caption=txt_caption,
+                file_name=f"{clean_batch_name}.txt",
+                thumb=custom_thumb or thumb
+            )
+            await app.send_document(
+                message.chat.id, 
+                zip_path,
+                caption=zip_caption,
+                file_name=f"{clean_batch_name}.zip",
+                thumb=custom_thumb or thumb
+            )
             
-            with open(file_path, "w", encoding='utf-8') as file:
-                file.write(''.join(extracted_data))  
-            return file_path
+            # Send to logs
+            await app.send_document(PREMIUM_LOGS, file_path, caption=txt_caption, thumb=custom_thumb or thumb)
+            await app.send_document(PREMIUM_LOGS, zip_path, caption=zip_caption, thumb=custom_thumb or thumb)
 
-        extracted_data, live_videos = await asyncio.gather(
-            process_course_contents(batch_id),
-            fetch_live_videos(batch_id)
-        )
+            # Cleanup
+            os.remove(file_path)
+            os.remove(zip_path)
+            if custom_thumb:
+                os.remove(custom_thumb)
 
-        extracted_data.extend(live_videos)
-        file_path = await write_to_file(extracted_data)
-
-        # Count different types of content
-        video_count = sum(1 for line in extracted_data if "Video" in line or ".mp4" in line)
-        pdf_count = sum(1 for line in extracted_data if ".pdf" in line)
-        total_links = len(extracted_data)
-        other_count = total_links - (video_count + pdf_count)
-        
-        caption = (
-            f"🎓 <b>COURSE EXTRACTED</b> 🎓\n\n"
-            f"📱 <b>APP:</b> {org_name}\n"
-            f"📚 <b>BATCH:</b> {batch_name}\n"
-            f"📅 <b>DATE:</b> {time_new} IST\n\n"
-            f"📊 <b>CONTENT STATS</b>\n"
-            f"├─ 📁 Total Links: {total_links}\n"
-            f"├─ 🎬 Videos: {video_count}\n"
-            f"├─ 📄 PDFs: {pdf_count}\n"
-            f"└─ 📦 Others: {other_count}\n\n"
-            f"🚀 <b>Extracted by</b>: @{(await app.get_me()).username}\n\n"
-            f"<code>╾───• {BOT_TEXT} •───╼</code>"
-        )
-
-        await app.send_document(message.chat.id, file_path, caption=caption)
-        await app.send_document(PREMIUM_LOGS, file_path, caption=caption)
-
-        os.remove(file_path)
-            
 
     
