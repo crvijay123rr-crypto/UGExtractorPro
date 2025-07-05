@@ -8,6 +8,7 @@ hachoir
 cloudscraper
 pycryptodome
 pytz
+backoff
 motor
 pyrofork
 PyJWT
