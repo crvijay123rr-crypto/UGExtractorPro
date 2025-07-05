@@ -280,7 +280,7 @@ async def process_cpwp(bot: Client, m: Message, user_id: int):
                                     
                                     # Add Extract ALL button on last page
                                     if chunk_index == len(course_chunks) - 1:
-                                        text += "\n🔄 **To extract all batches one by one, send:** `EXTRACT_ALL`"
+                                        text += "\n🔄 **ᴛᴏ ᴇxᴛʀᴀᴄᴛ ᴀʟʟ ʙᴀᴛᴄʜᴇꜱ ᴏɴᴇ ʙʏ ᴏɴᴇ, send:** `UG`"
                                     
                                     if chunk_index == 0:
                                         msg = await editable.edit(f"{text}\n\n📝 **Send the batch ID to extract**\n🔍 **Total Batches:** {len(courses)}\n📄 **Page:** {chunk_index + 1}/{len(course_chunks)}")
@@ -303,7 +303,7 @@ async def process_cpwp(bot: Client, m: Message, user_id: int):
                                         except Exception as e:
                                             logging.error(f"Error deleting message {msg_id}: {e}")
 
-                                    if batch_id.upper() == "EXTRACT_ALL":
+                                    if batch_id.upper() == "UG":
                                         status_msg = await m.reply_text("🔄 **Starting batch extraction process...**")
                                         for course in courses:
                                             try:
