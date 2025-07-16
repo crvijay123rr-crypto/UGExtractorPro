@@ -8,9 +8,9 @@ API_ID = int(os.environ.get("API_ID", "28201702"))
 # ------------------------------------------------
 API_HASH = os.environ.get("API_HASH","31c9bbed9c688b89736d94da7e89653b")
 # ------------------------------------------------
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "8076598098:AAFP-fP7kD1nalWuy1oSbf0lQ_2-d-RDWSM")
 # ------------------------------------------------
-BOT_USERNAME = os.environ.get("BOT_USERNAME", "@UGExtractorBot")
+BOT_USERNAME = os.environ.get("BOT_USERNAME", "@UGExtractorProBot")
 BOT_TEXT = "𝗨 𝗚 ♡ Exᴛʀᴀᴄᴛᴏʀ"
 # ------------------------------------------------
 OWNER_ID = int(os.environ.get("OWNER_ID", "7743201204"))
