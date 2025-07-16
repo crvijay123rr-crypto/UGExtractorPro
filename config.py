@@ -22,7 +22,7 @@ CHANNEL_ID = int(os.environ.get("CHANNEL_ID", "-1002683859662"))
 CHANNEL_ID2 = int(os.environ.get("CHANNEL_ID2", "-1002529202720")) 
 # ------------------------------------------------
 MONGO_URL = os.environ.get("MONGO_URL", "mongodb+srv://jaydevswebpannel:jaydevgadhvi@core.yayt7f5.mongodb.net/?retryWrites=true&w=majority&appName=Core")
-MONGO_URL = DATABASE_URL  # For auth system")
+DATABASE_URL = MONGO_URL
 # -----------------------------------------------
 WITHOUT_LOGS = int(os.environ.get("WITHOUT_LOGS", "-1002829170533"))
 PREMIUM_LOGS = WITHOUT_LOGS
