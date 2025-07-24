@@ -62,24 +62,24 @@ buttons = InlineKeyboardMarkup([
 
     # All direct app buttons
     [
-        InlineKeyboardButton("👑 Aᴘɴɪ Kᴀᴋsʜᴀ", callback_data="ak_"),
-        InlineKeyboardButton("👑 Aᴅᴅᴀ 𝟸𝟺𝟽", callback_data="adda_")
+        InlineKeyboardButton(" Aᴘɴɪ Kᴀᴋsʜᴀ", callback_data="ak_"),
+        InlineKeyboardButton(" Aᴅᴅᴀ 𝟸𝟺𝟽", callback_data="adda_")
     ],
     [
-        InlineKeyboardButton("👑 CʟᴀssPʟᴜs", callback_data="classplus_"),
-        # InlineKeyboardButton("👑 Kʜᴀɴ Gs", callback_data="khan_")
+        InlineKeyboardButton(" CʟᴀssPʟᴜs", callback_data="classplus_"),
+        # InlineKeyboardButton(" Kʜᴀɴ Gs", callback_data="khan_")
     ],
     [
-        InlineKeyboardButton("👑 Pʜʏꜱɪᴄꜱ Wᴀʟʟᴀʜ", callback_data="pw_"),
-        InlineKeyboardButton("👑 Sᴛᴜᴅʏ IQ", callback_data="iq_")
+        InlineKeyboardButton(" Pʜʏꜱɪᴄꜱ Wᴀʟʟᴀʜ", callback_data="pw_"),
+        InlineKeyboardButton(" Sᴛᴜᴅʏ IQ", callback_data="iq_")
     ],
     [
-        InlineKeyboardButton("👑 Kᴅ Cᴀᴍᴘᴜꜱ", callback_data="kdlive_"),
-        InlineKeyboardButton("👑 Uᴛᴋᴀʀꜱʜ", callback_data="utkarsh_")
+        InlineKeyboardButton(" Kᴅ Cᴀᴍᴘᴜꜱ", callback_data="kdlive_"),
+        InlineKeyboardButton(" Uᴛᴋᴀʀꜱʜ", callback_data="utkarsh_")
     ],
     [
-        InlineKeyboardButton("👑 Mʏ Pᴀᴛʜꜱʜᴀʟᴀ", callback_data="my_pathshala_"),
-        # InlineKeyboardButton("👑 ExᴀᴍPᴜʀ", callback_data="exampur_txt")
+        InlineKeyboardButton(" Mʏ Pᴀᴛʜꜱʜᴀʟᴀ", callback_data="my_pathshala_"),
+        # InlineKeyboardButton(" ExᴀᴍPᴜʀ", callback_data="exampur_txt")
     ],
 
 
@@ -99,12 +99,12 @@ buttons = InlineKeyboardMarkup([
 
 custom_button = InlineKeyboardMarkup([
     [
-        InlineKeyboardButton("🧩 𝐏𝐡𝐲𝐬𝐢𝐜𝐬 𝐖𝐚𝐥𝐥𝐚𝐡", callback_data="pwwp"),
-        InlineKeyboardButton("⚙️ 𝐀𝐩𝐩𝐱 ", callback_data="appxwp")
+        InlineKeyboardButton("𝐏𝐡𝐲𝐬𝐢𝐜𝐬 𝐖𝐚𝐥𝐥𝐚𝐡", callback_data="pwwp"),
+        InlineKeyboardButton("𝐀𝐩𝐩𝐱 ", callback_data="appxwp")
     ],
     
     [
-        InlineKeyboardButton("💥 𝐂𝐥𝐚𝐬𝐬𝐏𝐥𝐮𝐬", callback_data="cpwp"),
+        InlineKeyboardButton(" 𝐂𝐥𝐚𝐬𝐬𝐏𝐥𝐮𝐬", callback_data="cpwp"),
     ],
     [
         InlineKeyboardButton("🔙 ʙᴀᴄᴋ ᴛᴏ ᴍᴇɴᴜ", callback_data="home_")
