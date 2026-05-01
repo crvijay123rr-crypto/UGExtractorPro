@@ -7,6 +7,7 @@ from Extractor.core.func import get_seconds
 from Extractor.core.mongo import plans_db  
 from pyrogram import filters 
 from pyrogram.errors.exceptions.bad_request_400 import MessageTooLong
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 
 @app.on_message(filters.command("remove_premium") )
@@ -32,58 +33,172 @@ async def remove_premium(client, message):
 
 @app.on_message(filters.command("myplan"))
 async def myplan(client, message):
-    user_id = message.from_user.id
-    user = message.from_user.mention
-    data = await plans_db.check_premium(user_id)  
-    if data and data.get("expire_date"):
-        expiry = data.get("expire_date")
-        expiry_ist = expiry.astimezone(pytz.timezone("Asia/Kolkata"))
-        expiry_str_in_ist = expiry.astimezone(pytz.timezone("Asia/Kolkata")).strftime("%d-%m-%Y\n⏱️ ᴇxᴘɪʀʏ ᴛɪᴍᴇ : %I:%M:%S %p")            
-        
-        current_time = datetime.datetime.now(pytz.timezone("Asia/Kolkata"))
-        time_left = expiry_ist - current_time
-            
-        
-        days = time_left.days
-        hours, remainder = divmod(time_left.seconds, 3600)
-        minutes, seconds = divmod(remainder, 60)
-            
-        
-        time_left_str = f"{days} ᴅᴀʏꜱ, {hours} ʜᴏᴜʀꜱ, {minutes} ᴍɪɴᴜᴛᴇꜱ"
-        await message.reply_text(f"⚜️ ᴘʀᴇᴍɪᴜᴍ ᴜꜱᴇʀ ᴅᴀᴛᴀ :\n\n👤 ᴜꜱᴇʀ : {user}\n⚡ ᴜꜱᴇʀ ɪᴅ : <code>{user_id}</code>\n⏰ ᴛɪᴍᴇ ʟᴇꜰᴛ : {time_left_str}\n⌛️ ᴇxᴘɪʀʏ ᴅᴀᴛᴇ : {expiry_str_in_ist}")   
-    else:
-        await message.reply_text(f"ʜᴇʏ {user},\n\nʏᴏᴜ ᴅᴏ ɴᴏᴛ ʜᴀᴠᴇ ᴀɴʏ ᴀᴄᴛɪᴠᴇ ᴘʀᴇᴍɪᴜᴍ ᴘʟᴀɴs")
-        
+    try:
+        user_id = message.from_user.id
+        user = message.from_user.mention
 
+        data = await plans_db.check_premium(user_id)
+
+        if data and data.get("expire_date"):
+            expiry = data.get("expire_date")
+
+            if expiry.tzinfo is None:
+                expiry = pytz.timezone("Asia/Kolkata").localize(expiry)
+
+            expiry_ist = expiry.astimezone(pytz.timezone("Asia/Kolkata"))
+
+            expiry_str_in_ist = expiry_ist.strftime(
+                "%d-%m-%Y\n⏱️ ᴇxᴘɪʀʏ ᴛɪᴍᴇ : %I:%M:%S %p"
+            )
+
+            current_time = datetime.datetime.now(pytz.timezone("Asia/Kolkata"))
+            time_left = expiry_ist - current_time
+
+            days = time_left.days
+            hours, remainder = divmod(time_left.seconds, 3600)
+            minutes, _ = divmod(remainder, 60)
+
+            time_left_str = f"{days} ᴅᴀʏꜱ, {hours} ʜᴏᴜʀꜱ, {minutes} ᴍɪɴᴜᴛᴇꜱ"
+
+            await message.reply_text(
+                f"⚜️ ᴘʀᴇᴍɪᴜᴍ ᴜꜱᴇʀ ᴅᴀᴛᴀ :\n\n"
+                f"👤 ᴜꜱᴇʀ : {user}\n"
+                f"⚡ ᴜꜱᴇʀ ɪᴅ : <code>{user_id}</code>\n"
+                f"⏰ ᴛɪᴍᴇ ʟᴇꜰᴛ : {time_left_str}\n"
+                f"⌛️ ᴇxᴘɪʀʏ ᴅᴀᴛᴇ : {expiry_str_in_ist}"
+            )
+        else:
+            await message.reply_text(
+                f"ʜᴇʏ {user},\n\nʏᴏᴜ ᴅᴏ ɴᴏᴛ ʜᴀᴠᴇ ᴀɴʏ ᴀᴄᴛɪᴠᴇ ᴘʀᴇᴍɪᴜᴍ ᴘʟᴀɴs"
+            )
+
+    except Exception as e:
+        print("Error:", e)
+        await message.reply_text("Something went wrong 😅")
 
 @app.on_message(filters.command("chk_premium"))
 async def get_premium(client, message):
-    if len(message.command) == 2:
-        user_id = int(message.command[1])
-        user = await client.get_users(user_id)
-        data = await plans_db.check_premium(user_id)  
-        if data and data.get("expire_date"):
-            expiry = data.get("expire_date") 
-            expiry_ist = expiry.astimezone(pytz.timezone("Asia/Kolkata"))
-            expiry_str_in_ist = expiry.astimezone(pytz.timezone("Asia/Kolkata")).strftime("%d-%m-%Y\n⏱️ ᴇxᴘɪʀʏ ᴛɪᴍᴇ : %I:%M:%S %p")            
-            
-            current_time = datetime.datetime.now(pytz.timezone("Asia/Kolkata"))
-            time_left = expiry_ist - current_time
-            
-            
-            days = time_left.days
-            hours, remainder = divmod(time_left.seconds, 3600)
-            minutes, seconds = divmod(remainder, 60)
-            
-            
-            time_left_str = f"{days} days, {hours} hours, {minutes} minutes"
-            await message.reply_text(f"⚜️ ᴘʀᴇᴍɪᴜᴍ ᴜꜱᴇʀ ᴅᴀᴛᴀ :\n\n👤 ᴜꜱᴇʀ : {user.mention}\n⚡ ᴜꜱᴇʀ ɪᴅ : <code>{user_id}</code>\n⏰ ᴛɪᴍᴇ ʟᴇꜰᴛ : {time_left_str}\n⌛️ ᴇxᴘɪʀʏ ᴅᴀᴛᴇ : {expiry_str_in_ist}")
+    try:
+        if len(message.command) == 2:
+
+            try:
+                user_id = int(message.command[1])
+            except:
+                return await message.reply_text("Invalid user id ❌")
+
+            # safe user fetch
+            try:
+                user = await client.get_users(user_id)
+                user_mention = user.mention
+            except:
+                user_mention = f"<code>{user_id}</code>"
+
+            data = await plans_db.check_premium(user_id)
+
+            if data and data.get("expire_date"):
+                expiry = data.get("expire_date")
+
+                # FIX timezone
+                if expiry.tzinfo is None:
+                    expiry = pytz.timezone("Asia/Kolkata").localize(expiry)
+
+                expiry_ist = expiry.astimezone(pytz.timezone("Asia/Kolkata"))
+
+                expiry_str_in_ist = expiry_ist.strftime(
+                    "%d-%m-%Y\n⏱️ ᴇxᴘɪʀʏ ᴛɪᴍᴇ : %I:%M:%S %p"
+                )
+
+                current_time = datetime.datetime.now(pytz.timezone("Asia/Kolkata"))
+                time_left = expiry_ist - current_time
+
+                days = time_left.days
+                hours, remainder = divmod(time_left.seconds, 3600)
+                minutes, _ = divmod(remainder, 60)
+
+                time_left_str = f"{days} days, {hours} hours, {minutes} minutes"
+
+                await message.reply_text(
+                    f"⚜️ ᴘʀᴇᴍɪᴜᴍ ᴜꜱᴇʀ ᴅᴀᴛᴀ :\n\n"
+                    f"👤 ᴜꜱᴇʀ : {user_mention}\n"
+                    f"⚡ ᴜꜱᴇʀ ɪᴅ : <code>{user_id}</code>\n"
+                    f"⏰ ᴛɪᴍᴇ ʟᴇꜰᴛ : {time_left_str}\n"
+                    f"⌛️ ᴇxᴘɪʀʏ ᴅᴀᴛᴇ : {expiry_str_in_ist}"
+                )
+
+            else:
+                await message.reply_text(
+                    "ɴᴏ ᴀɴʏ ᴘʀᴇᴍɪᴜᴍ ᴅᴀᴛᴀ ꜰᴏᴜɴᴅ ❌"
+                )
+
         else:
-            await message.reply_text("ɴᴏ ᴀɴʏ ᴘʀᴇᴍɪᴜᴍ ᴅᴀᴛᴀ ᴏꜰ ᴛʜᴇ ᴡᴀꜱ ꜰᴏᴜɴᴅ ɪɴ ᴅᴀᴛᴀʙᴀꜱᴇ !")
-    else:
-        await message.reply_text("ᴜꜱᴀɢᴇ : /chk_premium user_id")
+            await message.reply_text("Usage: /chk_premium user_id")
+
+    except Exception as e:
+        print("ERROR:", e)
+        await message.reply_text("Error aa gaya 😅")
 
 
+# MAIN COMMAND
+@app.on_message(filters.command("plans"))
+async def plans(client, message):
+
+    buttons = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🎁 Free Trial", callback_data="free")],
+        [InlineKeyboardButton("🥉 Bronze", callback_data="bronze"),
+         InlineKeyboardButton("🥈 Silver", callback_data="silver")],
+        [InlineKeyboardButton("🥇 Gold", callback_data="gold")],
+        [InlineKeyboardButton("🎯 Other Plan", callback_data="other")],
+        [InlineKeyboardButton("💳 Payment", callback_data="payment")]
+    ])
+
+    await message.reply_text(
+        PLANS_TXT,
+        reply_markup=buttons,
+        disable_web_page_preview=True
+    )
+
+@app.on_callback_query()
+async def cb_handler(client, query):
+
+    data = query.data
+
+    back_btn = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔙 Back", callback_data="back")]
+    ])
+
+    if data == "free":
+        await query.message.edit_text(FREE_TXT, reply_markup=back_btn)
+
+    elif data == "bronze":
+        await query.message.edit_text(BRONZE_TXT, reply_markup=back_btn)
+
+    elif data == "silver":
+        await query.message.edit_text(SILVER_TXT, reply_markup=back_btn)
+
+    elif data == "gold":
+        await query.message.edit_text(GOLD_TXT, reply_markup=back_btn)
+
+    elif data == "other":
+        await query.message.edit_text(OTHER_TXT, reply_markup=back_btn)
+
+    elif data == "payment":
+        await query.message.edit_text(PAYMENT_TXT, reply_markup=back_btn, disable_web_page_preview=True)
+
+    elif data == "back":
+        buttons = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🎁 Free Trial", callback_data="free")],
+            [InlineKeyboardButton("🥉 Bronze", callback_data="bronze"),
+             InlineKeyboardButton("🥈 Silver", callback_data="silver")],
+            [InlineKeyboardButton("🥇 Gold", callback_data="gold")],
+            [InlineKeyboardButton("🎯 Other Plan", callback_data="other")],
+            [InlineKeyboardButton("💳 Payment", callback_data="payment")]
+        ])
+
+        await query.message.edit_text(
+            PLANS_TXT,
+            reply_markup=buttons,
+            disable_web_page_preview=True
+        )
 @app.on_message(filters.command("add_premium"))
 async def give_premium_cmd_handler(client, message):
     if len(message.command) == 4:
