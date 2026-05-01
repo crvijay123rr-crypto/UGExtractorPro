@@ -97,19 +97,190 @@ buttons = InlineKeyboardMarkup([
 
 
 
+# ================== PREMIUM SYSTEM ==================
+
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from pyrogram import filters
+from pyrogram.enums import ParseMode
+
+# ---------- CUSTOM BUTTON ----------
 custom_button = InlineKeyboardMarkup([
     [
         InlineKeyboardButton("𝐏𝐡𝐲𝐬𝐢𝐜𝐬 𝐖𝐚𝐥𝐥𝐚𝐡", callback_data="pwwp"),
-        InlineKeyboardButton("𝐀𝐩𝐩𝐱 ", callback_data="appxwp")
-    ],
-    
-    [
-        InlineKeyboardButton(" 𝐂𝐥𝐚𝐬𝐬𝐏𝐥𝐮𝐬", callback_data="cpwp"),
+        InlineKeyboardButton("𝐀𝐩𝐩𝐱", callback_data="appxwp")
     ],
     [
-        InlineKeyboardButton("🔙 ʙᴀᴄᴋ ᴛᴏ ᴍᴇɴᴜ", callback_data="home_")
+        InlineKeyboardButton("𝐂𝐥𝐚𝐬𝐬𝐏𝐥𝐮𝐬", callback_data="cpwp"),
+    ],
+    [
+        InlineKeyboardButton("💎 Premium Members", callback_data="premium_menu")
+    ],
+    [
+        InlineKeyboardButton("🔙 Back To Menu", callback_data="home_")
     ]
 ])
+
+# ---------- PREMIUM MENU ----------
+premium_keyboard = InlineKeyboardMarkup([
+    [
+        InlineKeyboardButton("🥉 Bronze", callback_data="premium_bronze"),
+        InlineKeyboardButton("🥈 Silver", callback_data="premium_silver")
+    ],
+    [
+        InlineKeyboardButton("🥇 Gold", callback_data="premium_gold")
+    ],
+    [
+        InlineKeyboardButton("🔙 Back", callback_data="custom_")
+    ]
+])
+
+# ---------- BRONZE ----------
+bronze_keyboard = InlineKeyboardMarkup([
+    [
+        InlineKeyboardButton("AppX Test", callback_data="premium_block"),
+        InlineKeyboardButton("Geo Concept", callback_data="premium_block")
+    ],
+    [
+        InlineKeyboardButton("Civil Guruji", callback_data="premium_block"),
+        InlineKeyboardButton("Ingenium Education", callback_data="premium_block")
+    ],
+    [
+        InlineKeyboardButton("Teach Zone", callback_data="premium_block"),
+        InlineKeyboardButton("RAS ONLY", callback_data="premium_block")
+    ],
+    [
+        InlineKeyboardButton("DAMS Delhi", callback_data="premium_block"),
+        InlineKeyboardButton("IxamBee", callback_data="premium_block")
+    ],
+    [
+        InlineKeyboardButton("Career Old", callback_data="premium_block"),
+        InlineKeyboardButton("Career Endeavour", callback_data="premium_block")
+    ],
+    [
+        InlineKeyboardButton("Chemistry Dais", callback_data="premium_block"),
+        InlineKeyboardButton("Trans Easy", callback_data="premium_block")
+    ],
+    [
+        InlineKeyboardButton("Pinnacle", callback_data="premium_block"),
+        InlineKeyboardButton("Pappu", callback_data="premium_block")
+    ],
+    [
+        InlineKeyboardButton("Test Paper", callback_data="premium_block"),
+        InlineKeyboardButton("TNC Nursing", callback_data="premium_block")
+    ],
+    [
+        InlineKeyboardButton("Civil Era", callback_data="premium_block"),
+        InlineKeyboardButton("Repro Neet", callback_data="premium_block")
+    ],
+    [
+        InlineKeyboardButton("🔙 Back", callback_data="premium_menu")
+    ]
+])
+
+# ---------- SILVER ----------
+silver_keyboard = InlineKeyboardMarkup([
+    [
+        InlineKeyboardButton("Quality Education", callback_data="premium_block"),
+        InlineKeyboardButton("ICS Coaching", callback_data="premium_block")
+    ],
+    [
+        InlineKeyboardButton("IES Master", callback_data="premium_block"),
+        InlineKeyboardButton("Master Learner's", callback_data="premium_block")
+    ],
+    [
+        InlineKeyboardButton("Prep Career", callback_data="premium_block"),
+        InlineKeyboardButton("Bhatia Aashram", callback_data="premium_block")
+    ],
+    [
+        InlineKeyboardButton("Physics Wallah", callback_data="premium_block"),
+        InlineKeyboardButton("PW All", callback_data="premium_block")
+    ],
+    [
+        InlineKeyboardButton("DSL Krantikari", callback_data="premium_block"),
+        InlineKeyboardButton("Inside CP", callback_data="premium_block")
+    ],
+    [
+        InlineKeyboardButton("Map Mind W/O", callback_data="premium_block"),
+        InlineKeyboardButton("Mind Map Login", callback_data="premium_block")
+    ],
+    [
+        InlineKeyboardButton("🔙 Back", callback_data="premium_menu")
+    ]
+])
+
+# ---------- GOLD (UPDATED) ----------
+gold_keyboard = InlineKeyboardMarkup([
+    [
+        InlineKeyboardButton("Angel Academy", callback_data="premium_block"),
+        InlineKeyboardButton("Gyan Academy", callback_data="premium_block")
+    ],
+    [
+        InlineKeyboardButton("Utkarsh", callback_data="premium_block"),
+        InlineKeyboardButton("Kalam Academy", callback_data="premium_block")
+    ],
+    [
+        InlineKeyboardButton("Ceramic Academy", callback_data="premium_block"),
+        InlineKeyboardButton("Selection Way", callback_data="premium_block")
+    ],
+    [
+        InlineKeyboardButton("@W Coaching", callback_data="premium_block")
+    ],
+    [
+        InlineKeyboardButton("🔙 Back", callback_data="premium_menu")
+    ]
+])
+
+# ================== HANDLERS ==================
+
+@app.on_callback_query(filters.regex("^premium_menu$"))
+async def premium_menu_handler(client, query):
+    await query.message.edit_text(
+        "💎 **Premium Plans**\n\nChoose your plan:",
+        reply_markup=premium_keyboard
+    )
+
+
+@app.on_callback_query(filters.regex("^premium_bronze$"))
+async def bronze_handler(client, query):
+    await query.message.edit_text(
+        "🥉 Bronze Plan",
+        reply_markup=bronze_keyboard
+    )
+
+
+@app.on_callback_query(filters.regex("^premium_silver$"))
+async def silver_handler(client, query):
+    await query.message.edit_text(
+        "🥈 Silver Plan",
+        reply_markup=silver_keyboard
+    )
+
+
+@app.on_callback_query(filters.regex("^premium_gold$"))
+async def gold_handler(client, query):
+    await query.message.edit_text(
+        "🥇 Gold Plan",
+        reply_markup=gold_keyboard
+    )
+
+
+# ---------- BLOCK MESSAGE ----------
+@app.on_callback_query(filters.regex("^premium_block$"))
+async def premium_block_handler(client, query):
+    text = (
+        "❌ Oopss! You are not a Premium member\n"
+        "Please upgrade Your Plan\n\n"
+        "👉 <a href='https://t.me/Courses_hub2_bot'>Buy</a>"
+    )
+
+    await query.message.edit_text(
+        text,
+        parse_mode=ParseMode.HTML,
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("💰 Buy Now", url="https://t.me/Courses_hub2_bot")],
+            [InlineKeyboardButton("🔙 Back", callback_data="premium_menu")]
+        ])
+                      )
 
 
 button2 = [
