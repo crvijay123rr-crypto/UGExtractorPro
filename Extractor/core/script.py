@@ -49,10 +49,10 @@ FREE_TXT = """
 ⌬ **﹝𝐅 𝐑 𝐄 𝐄﹞**
 <b>
 🏆 <u>ꜰʀᴇᴇ ᴛʀɪᴀʟ</u> 🏆
-❗ ᴏɴʟʏ ꜰᴏʀ 5 ᴍɪɴᴜᴛᴇꜱ
+❗ Not available 
  
-○ ʙʏᴘᴀss ᴀʟʟ ᴄᴏᴜʀsᴇ
-○ ғᴀsᴛ ɴᴏᴅᴇ 
+○ ʙʏᴘᴀss ᴀʟʟ ᴄᴏᴜʀsᴇ only silver 
+○ gold bronze 🥉 
 </b>"""
 
 BRONZE_TXT = """
