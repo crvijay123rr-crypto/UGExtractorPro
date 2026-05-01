@@ -12,7 +12,7 @@ def print_banner():
     banner = f"""
 {Fore.CYAN}╭──────────────────────────────────────╮
 │  {Fore.YELLOW}🔒 Python Code Encryptor/Decryptor {Fore.CYAN} │
-│     {Fore.GREEN}Created by @GodxBots{Fore.CYAN}           │
+│     {Fore.GREEN}Created by @Courses_hub2_bot{Fore.CYAN}           │
 ╰──────────────────────────────────────╯{Style.RESET_ALL}
 """
     print(banner)
@@ -40,7 +40,7 @@ def encrypt_code(source_code):
         encoded = base64.b85encode(zlib.compress(source_code.encode())).decode()
         
         encrypted_code = f'''
-# Encrypted by @GodxBots
+# Encrypted by @Courses_hub2_bot
 import base64
 import zlib
 import codecs
