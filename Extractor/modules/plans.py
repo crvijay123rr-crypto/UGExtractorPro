@@ -8,7 +8,15 @@ from Extractor.core.mongo import plans_db
 from pyrogram import filters 
 from pyrogram.errors import MessageTooLong
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-
+from Extractor.core.script import (
+    PLANS_TXT,
+    FREE_TXT,
+    BRONZE_TXT,
+    SILVER_TXT,
+    GOLD_TXT,
+    OTHER_TXT,
+    PAYMENT_TXT
+)
 
 IST = pytz.timezone("Asia/Kolkata")
 
