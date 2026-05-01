@@ -61,7 +61,7 @@ async def subscribe(app, message):
         try:
             user = await app.get_chat_member(update_channel, message.from_user.id)
             if user.status == "kicked":
-                await message.reply_text("🚫 Sorry Sir, You are Banned. Contact My Support Group @DevsOops")
+                await message.reply_text("🚫 Sorry Sir, You are Banned. Contact My Support Group @Courses_hub2_bot")
                 return 1
         except UserNotParticipant:
             try:
@@ -102,7 +102,7 @@ async def subscribe(app, message):
                 await message.reply_text(
                     "❗ Please join our updates channel to use the bot.",
                     reply_markup=InlineKeyboardMarkup([[
-                        InlineKeyboardButton("🤖 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇs ᴄʜᴀɴɴᴇʟ 🤖", url="https://t.me/UGBotx")
+                        InlineKeyboardButton("🤖 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇs ᴄʜᴀɴɴᴇʟ 🤖", url="https://t.me/free_courses_2026")
                     ]])
                 )
             return 1
