@@ -165,7 +165,11 @@ async def plans(client, message):
 @app.on_callback_query(filters.regex("^(free|bronze|silver|gold|payment|back)$"))
 async def cb_handler(client, query):
 
-    back = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="back")]])
+    await query.answer()  # ⚡ important
+
+    back = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔙 Back", callback_data="back")]
+    ])
 
     if query.data == "free":
         await query.message.edit_text(FREE_TXT, reply_markup=back)
@@ -183,7 +187,20 @@ async def cb_handler(client, query):
         await query.message.edit_text(PAYMENT_TXT, reply_markup=back, disable_web_page_preview=True)
 
     elif query.data == "back":
-        await plans(client, query.message)
+
+        buttons = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🎁 Free", callback_data="free")],
+            [InlineKeyboardButton("🥉 Bronze", callback_data="bronze"),
+             InlineKeyboardButton("🥈 Silver", callback_data="silver")],
+            [InlineKeyboardButton("🥇 Gold", callback_data="gold")],
+            [InlineKeyboardButton("💳 Payment", callback_data="payment")]
+        ])
+
+        await query.message.edit_text(
+            PLANS_TXT,
+            reply_markup=buttons,
+            disable_web_page_preview=True
+        )
 
 
 # ---------------- ADD PREMIUM ---------------- #
