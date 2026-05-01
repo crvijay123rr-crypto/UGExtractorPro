@@ -55,8 +55,6 @@ thumb_path = "Extractor/thumbs/txt-5.jpg"
 THREADPOOL = ThreadPoolExecutor(max_workers=2000)
 TIMEOUT = 300  # 5 minutes timeout
 
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-
 buttons = InlineKeyboardMarkup([
     [InlineKeyboardButton("🚀 ᴍᴀᴅᴇ ʙʏ @Courses_hub2_bot", url="https://t.me/Courses_hub2_bot")],
 
