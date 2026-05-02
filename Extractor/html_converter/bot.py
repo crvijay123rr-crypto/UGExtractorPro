@@ -504,7 +504,7 @@ def generate_html(file_name, videos, pdfs, others):
                 opacity: 0;
                 transition: all 0.3s ease;
             }}
-            .list-group-item:hover {
+            .list-group-item:hover {{
                 background: rgba(139, 92, 246, 0.15);
                 transform: translateX(10px);
                 border-color: #8b5cf6;
