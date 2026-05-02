@@ -41,7 +41,7 @@ def categorize_urls(urls):
     for name, url in urls:
         u = url.lower()
 
-        if any(x in u for x in [".m3u8", ".mp4", "youtu", "vimeo"]):
+        if any(x in u for x in [".m3u8", ".mp4", ".mpd", "youtu", "vimeo", "jwplayer", "testbook"]):
             videos.append((name, url))
         elif ".pdf" in u:
             pdfs.append((name, url))
@@ -53,7 +53,7 @@ def categorize_urls(urls):
 
 # ================= OBFUSCATE =================
 def obfuscate_url(url):
-    salt = ''.join(random.choices(string.ascii_letters, k=6))
+    salt = ''.join(random.choices(string.ascii_letters + string.digits, k=6))
     return base64.b64encode((salt + url).encode()).decode()
 
 
@@ -68,11 +68,11 @@ def generate_html(file_name, videos, pdfs, others):
 
     pdf_cards = ""
     for n, u in pdfs:
-        pdf_cards += f"<div class='card'><a href='{u}' target='_blank'>📄 {n}</a></div>"
+        pdf_cards += f"<div class='card'><a href='{u}' target='_blank' rel='noopener noreferrer'>📄 {n}</a></div>"
 
     other_cards = ""
     for n, u in others:
-        other_cards += f"<div class='card'><a href='{u}' target='_blank'>🔗 {n}</a></div>"
+        other_cards += f"<div class='card'><a href='{u}' target='_blank' rel='noopener noreferrer'>🔗 {n}</a></div>"
 
     return f"""<!DOCTYPE html>
 <html>
@@ -177,54 +177,60 @@ select {{
 
 <script>
 let player = new Plyr('#player');
-let hls;
+let hls = null;
 
 function decode(x){{
-    return atob(x).slice(6)
+    return atob(x).slice(6);
 }}
 
 function play(x){{
-    let url = decode(x)
+    let url = decode(x);
 
-    if(hls) {{
+    if(hls){{
         hls.destroy();
+        hls = null;
     }}
 
-    if(url.includes(".m3u8")) {{
+    if(url.includes(".m3u8")){{
         hls = new Hls();
         hls.loadSource(url);
         hls.attachMedia(player.media);
+
+        hls.on(Hls.Events.MANIFEST_PARSED, function () {{
+            player.play();
+        }});
     }} else {{
         player.source = {{
             type: 'video',
             sources: [{{ src: url, type: 'video/mp4' }}]
         }};
+        player.play();
     }}
 
     window.scrollTo({{top:0,behavior:'smooth'}});
 }}
 
 function changeQuality(q){{
-    if(!hls) return;
+    if(!hls || !hls.levels) return;
 
     if(q === "auto"){{
         hls.currentLevel = -1;
     }} else {{
-        let levels = hls.levels;
-        for(let i=0;i<levels.length;i++){{
-            if(levels[i].height == q){{
+        for(let i=0;i<hls.levels.length;i++){{
+            if(hls.levels[i].height == q){{
                 hls.currentLevel = i;
+                break;
             }}
         }}
     }}
 }}
 
 function tab(id,el){{
-    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'))
-    el.classList.add('active')
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    el.classList.add('active');
 
-    document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'))
-    document.getElementById(id).classList.add('active')
+    document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
 }}
 </script>
 
@@ -235,39 +241,29 @@ function tab(id,el){{
 
 # ================= BOT HANDLER =================
 async def handle_txt2html(client: Client, message: Message):
-    """Handle text file to HTML conversion."""
     
     if not message.document or not message.document.file_name.endswith('.txt'):
         await message.reply_text("❌ Please upload a valid .txt file.")
         return
         
     try:
-        # Download file
         file_path = await message.download()
         file_name = message.document.file_name
         
-        # Read content
         with open(file_path, "r", encoding='utf-8') as f:
             file_content = f.read()
             
-        # Extract URLs
         urls = extract_names_and_urls(file_content)
         if not urls:
             await message.reply_text(
                 "❌ No valid content found!\n\n"
-                "📌 Format:\n"
-                "Name: URL\n"
-                "Name2: URL2"
+                "📌 Format:\nName: URL"
             )
             return
             
-        # Categorize
         videos, pdfs, others = categorize_urls(urls)
-        
-        # Generate HTML
         html_content = generate_html(file_name, videos, pdfs, others)
         
-        # Save file
         base_name = os.path.splitext(file_name)[0]
         html_file_name = f"{base_name}@courses_hub2_bot.html"
         html_file_path = os.path.join(os.path.dirname(file_path), html_file_name)
@@ -275,21 +271,18 @@ async def handle_txt2html(client: Client, message: Message):
         with open(html_file_path, "w", encoding='utf-8') as f:
             f.write(html_content)
         
-        # 🔥 Attractive Caption
         caption = (
             "<b>✨ HTML FILE GENERATED SUCCESSFULLY ✨</b>\n\n"
             "┏━━━━━━━━━━━━━━━━━━━━━━━┓\n"
             "┃ 🖤 Ultra Dark Premium UI\n"
-            "┃ 🎬 Smart Video Player\n"
-            "┃ 📄 PDF Section Support\n"
-            "┃ 🔗 Organized Categories\n"
-            "┃ 🔍 Smart Search Enabled\n"
-            "┃ ⚡ Fast & Smooth Performance\n"
-            "┗━━━━━━━━━━━━━━━━━━━━━━━┛\n\n"
-            "<i>🚀 Powered by @courses_hub2_bot</i>"
+            "┃ 🎬 Direct Video Player\n"
+            "┃ ⚡ Quality Selector (Auto/360/720)\n"
+            "┃ 📄 PDF Support\n"
+            "┃ 🔗 Clean Categories\n"
+            "┃ 🚀 Fast Streaming\n"
+            "┗━━━━━━━━━━━━━━━━━━━━━━━┛"
         )
         
-        # Send file
         await message.reply_document(
             document=html_file_path,
             thumb=thumb_path if thumb_path else None,
@@ -297,14 +290,9 @@ async def handle_txt2html(client: Client, message: Message):
             file_name=html_file_name
         )
 
-        # Forward to channel
         if CHANNEL_ID:
-            await client.send_document(
-                chat_id=CHANNEL_ID,
-                document=html_file_path
-            )
+            await client.send_document(chat_id=CHANNEL_ID, document=html_file_path)
         
-        # Cleanup
         try:
             os.remove(file_path)
             os.remove(html_file_path)
