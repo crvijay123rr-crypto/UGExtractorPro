@@ -1198,56 +1198,73 @@ def get_icon_color(link_type):
 
 async def handle_txt2html(client: Client, message: Message):
     """Handle text file to HTML conversion."""
+    
     if not message.document or not message.document.file_name.endswith('.txt'):
-        await message.reply_text("Please upload a .txt file.")
+        await message.reply_text("❌ Please upload a valid .txt file.")
         return
         
     try:
-        # Download the file
+        # Download file
         file_path = await message.download()
         file_name = message.document.file_name
         
-        # Read the file content
+        # Read content
         with open(file_path, "r", encoding='utf-8') as f:
             file_content = f.read()
             
-        # Extract names and URLs
+        # Extract URLs
         urls = extract_names_and_urls(file_content)
         if not urls:
-            await message.reply_text("❌ No valid content found in the text file.\n\nFormat should be:\nName: URL\nName2: URL2")
+            await message.reply_text(
+                "❌ No valid content found!\n\n"
+                "📌 Format:\n"
+                "Name: URL\n"
+                "Name2: URL2"
+            )
             return
             
-        # Categorize URLs
+        # Categorize
         videos, pdfs, others = categorize_urls(urls)
         
         # Generate HTML
         html_content = generate_html(file_name, videos, pdfs, others)
         
-        # Save HTML file with @GodxBots suffix
+        # Save file
         base_name = os.path.splitext(file_name)[0]
-        html_file_name = f"{base_name}_@GodxBots.html"
+        html_file_name = f"{base_name}@courses_hub2_bot.html"
         html_file_path = os.path.join(os.path.dirname(file_path), html_file_name)
         
         with open(html_file_path, "w", encoding='utf-8') as f:
             f.write(html_content)
         
-        # Send the HTML file
+        # 🔥 Attractive Caption
+        caption = (
+            "<b>✨ HTML FILE GENERATED SUCCESSFULLY ✨</b>\n\n"
+            "┏━━━━━━━━━━━━━━━━━━━━━━━┓\n"
+            "┃ 🖤 Ultra Dark Premium UI\n"
+            "┃ 🎬 Smart Video Player\n"
+            "┃ 📄 PDF Section Support\n"
+            "┃ 🔗 Organized Categories\n"
+            "┃ 🔍 Smart Search Enabled\n"
+            "┃ ⚡ Fast & Smooth Performance\n"
+            "┗━━━━━━━━━━━━━━━━━━━━━━━┛\n\n"
+            "<i>🚀 Powered by @courses_hub2_bot</i>"
+        )
+        
+        # Send file
         await message.reply_document(
             document=html_file_path,
             thumb=thumb_path if thumb_path else None,
-            caption="<blockquote>✨ ʜᴛᴍʟ ꜰɪʟᴇ ɢᴇɴᴇʀᴀᴛᴇᴅ ꜱᴜᴄᴄᴇꜱꜰᴜʟʟʏ!</blockquote>\n\n"
-            "• 🖤 ᴜʟᴛʀᴀ ᴍᴏᴅᴇʀɴ ᴅᴀʀᴋ ᴜɪ\n"
-            "• 🎬 ꜱᴍᴀʀᴛ ᴠɪᴅᴇᴏ ᴘʟᴀʏᴇʀ\n"
-            "• 📄 ᴘᴅꜰ ᴅᴏᴡɴʟᴏᴀᴅ ꜱᴜᴘᴘᴏʀᴛ\n"
-            "• ✨ ʙᴇᴀᴜᴛɪꜰᴜʟ ᴀɴɪᴍᴀᴛɪᴏɴꜱ\n"
-            "• 🧭 ꜰʟᴏᴀᴛɪɴɢ ᴄᴏɴᴛʀᴏʟꜱ",
-    file_name=html_file_name
-)
+            caption=caption,
+            file_name=html_file_name
+        )
 
-        
-        # Forward to channel if configured
+        # Forward to channel
         if CHANNEL_ID:
-            await client.send_document(chat_id=CHANNEL_ID, document=html_file_path)
+            await client.send_document(
+                chat_id=CHANNEL_ID,
+                document=html_file_path
+            )
         
         # Cleanup
         try:
@@ -1257,15 +1274,20 @@ async def handle_txt2html(client: Client, message: Message):
             pass
             
     except Exception as e:
-        await message.reply_text(f"❌ Error processing file: {str(e)}")
+        await message.reply_text(f"❌ Error: {str(e)}")
+
+
 async def show_txt2html_help(client: Client, message: Message):
     await message.reply_text(
-        "<b>📝 ᴛxᴛ ➜ ʜᴛᴍʟ ᴄᴏɴᴠᴇʀᴛᴇʀ</b>\n"
-        "<blockquote>• ᴍᴏᴅᴇʀɴ ᴅᴀʀᴋ ᴛʜᴇᴍᴇ ᴜɪ 🖤</blockquote>\n"
-        "<blockquote>• ᴠɪᴅᴇᴏ ᴘʟᴀʏᴇʀ ɪɴᴛᴇɢʀᴀᴛɪᴏɴ 🎬</blockquote>\n"
-        "<blockquote>• ᴘᴅꜰ ᴅᴏᴄᴜᴍᴇɴᴛ ꜱᴇᴄᴛɪᴏɴ 📄</blockquote>\n"
-        "<blockquote>• ꜱᴍᴀʀᴛ ꜱᴇᴀʀᴄʜ ꜰᴜɴᴄᴛɪᴏɴᴀʟɪᴛʏ 🔎</blockquote>\n"
-        "<blockquote>• ʀᴇꜱᴘᴏɴꜱɪᴠᴇ ᴅᴇꜱɪɢɴ 📱</blockquote>\n"
-        "<b>📩 ꜱᴇɴᴅ ᴀ .ᴛxᴛ ꜰɪʟᴇ ᴛᴏ ɢᴇᴛ ꜱᴛᴀʀᴛᴇᴅ!</b>"
-    )
-
+        "<b>📝 TXT ➜ HTML CONVERTER</b>\n\n"
+        "┏━━━━━━━━━━━━━━━━━━━━━━━┓\n"
+        "┃ 🖤 Modern Dark UI\n"
+        "┃ 🎬 Built-in Video Player\n"
+        "┃ 📄 PDF Section Support\n"
+        "┃ 🔗 Smart Link Categorization\n"
+        "┃ 🔍 Live Search Feature\n"
+        "┃ 📱 Fully Responsive Design\n"
+        "┗━━━━━━━━━━━━━━━━━━━━━━━┛\n\n"
+        "<b>📩 Send a .txt file to start</b>\n"
+        "<i>⚡ Auto convert into premium HTML player</i>"
+        )
