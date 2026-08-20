@@ -1,58 +1,70 @@
-import asyncio
 import importlib
-import signal
 import os
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-from pyrogram import idle
+from Extractor import app
 from Extractor.modules import ALL_MODULES
 
-loop = asyncio.get_event_loop()
 
-# ------------------ WEB SERVER (Koyeb Fix) ------------------ #
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
+        self.send_header("Content-Type", "text/plain; charset=utf-8")
         self.end_headers()
         self.wfile.write(b"Bot is running")
 
+    def log_message(self, format, *args):
+        return
+
+
 def run_web():
-    port = int(os.environ.get("PORT", 8000))
-    server = HTTPServer(("", port), Handler)
-    server.serve_forever()
+    try:
+        port = int(os.environ.get("PORT", "8000"))
+        server = HTTPServer(("0.0.0.0", port), Handler)
+        server.serve_forever()
+    except Exception as e:
+        print(f"Web server error: {e}")
 
-threading.Thread(target=run_web).start()
 
-# ------------------ Graceful shutdown ------------------ #
-should_exit = asyncio.Event()
+def load_modules():
+    print("📦 Loading modules...")
 
-def shutdown():
-    print("Shutting down gracefully...")
-    should_exit.set()
+    loaded = 0
+    failed = 0
 
-signal.signal(signal.SIGTERM, lambda s, f: loop.create_task(should_exit.set()))
-signal.signal(signal.SIGINT, lambda s, f: loop.create_task(should_exit.set()))
+    for module_name in ALL_MODULES:
+        try:
+            importlib.import_module(
+                f"Extractor.modules.{module_name}"
+            )
+            print(f"✅ Loaded: {module_name}")
+            loaded += 1
 
-# ------------------ Main Bot ------------------ #
-async def sumit_boot():
-    for all_module in ALL_MODULES:
-        importlib.import_module("Extractor.modules." + all_module)
+        except Exception as e:
+            print(f"❌ Failed: {module_name} -> {e}")
+            failed += 1
 
-    print("» ʙᴏᴛ ᴅᴇᴘʟᴏʏ sᴜᴄᴄᴇssғᴜʟʟʏ my onwer CR CHOUDHARY JI✨ 🎉")
-    await idle()
+    print(
+        f"\n📦 Modules loaded: {loaded}"
+        f" | Failed: {failed}\n"
+    )
 
-    print("» ɢᴏᴏᴅ ʙʏᴇ ! sᴛᴏᴘᴘɪɴɢ ʙᴏᴛ.")
 
 if __name__ == "__main__":
-    try:
-        loop.run_until_complete(sumit_boot())
-    except KeyboardInterrupt:
-        print("Interrupted by user.")
-    finally:
-        pending = asyncio.all_tasks(loop)
-        for task in pending:
-            task.cancel()
-        loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
-        loop.close()
-        print("Loop closed.")
+
+    # Load all bot handlers first
+    load_modules()
+
+    # Start health/web server
+    threading.Thread(
+        target=run_web,
+        daemon=True
+    ).start()
+
+    print("🚀 Starting UG Extractor Pro...")
+    print("🤖 Waiting for Telegram commands...")
+
+    # IMPORTANT:
+    # Pyrogram manages its own event loop
+    app.run()
